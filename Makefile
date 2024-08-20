@@ -65,10 +65,13 @@ all : check_tools bootloaders
 
 # Check if tools are installed
 check_tools:
-	@if [ ! -f $(CC) ]; then \
-		echo "Error: please install tools first."; \
-		exit 1; \
-	fi
+ifeq ($(OS),Windows_NT)
+	@if not exist "$(CC).exe" ( \
+		echo Error: please install tools first with target arm_sdk_install. & exit /B 1 \
+	)
+else
+	@$(SHELL) -c 'command -v $(CC) >/dev/null 2>&1 || { echo "Error: please install tools first with target arm_sdk_install."; exit 1; }'
+endif
 
 clean :
 	@echo Removing $(OBJ) directory
@@ -141,6 +144,9 @@ endef
 $(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(BOOTLOADER_PINS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
 
 bootloaders: $(ALL_BUILDS)
+
+# include the targets for installing tools
+include $(ROOT)/make/tools_install.mk
 
 # useful target to list all of the board targets so you can see what
 # make target to use for your board
