@@ -14,10 +14,11 @@
 #define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
-  64k flash. NOTE: some boards have 128k flash, we need 2 bootloaders
+  some boards have 128k flash, some have 64k flash. We default to 128 and
+  override in the Makefile for the 64K build
  */
 #ifndef BOARD_FLASH_SIZE
-#define BOARD_FLASH_SIZE 32
+#define BOARD_FLASH_SIZE 128
 #endif
 
 #define GPIO_PIN(n) (1U<<(n))

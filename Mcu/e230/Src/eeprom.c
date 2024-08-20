@@ -4,7 +4,7 @@
 
 #include "gd32e23x_fmc.h"
 
-#define page_size 0x400 // 1 kb for f051
+#define page_size 0x400 // 1 kb for e230
 
 bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 {
@@ -25,7 +25,7 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
     volatile uint32_t index = 0;
     while (index < data_length) {
 	uint32_t word;
-	memcpy(&word, (void*)(add+(index*4)), sizeof(word));
+	memcpy(&word, (void*)(data+(index*4)), sizeof(word));
 	fmc_word_program(add + (index * 4), word);
         fmc_flag_clear(FMC_FLAG_END | FMC_FLAG_WPERR | FMC_FLAG_PGERR);
         index++;

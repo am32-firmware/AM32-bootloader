@@ -142,27 +142,52 @@ void SysTick_Handler(void)
         }                                   \
     } while (0)
 
-/*!
-    \brief      configure the system clock to 8M by IRC8M
-    \param[in]  none
-    \param[out] none
-    \retval     none
-*/
-static void system_clock_8m_irc8m(void)
+static void system_clock_72m_irc8m(void)
 {
+    uint32_t timeout = 0U;
+    uint32_t stab_flag = 0U;
+
+    /* enable IRC8M */
+    RCU_CTL0 |= RCU_CTL0_IRC8MEN;
+
+    /* wait until IRC8M is stable or the startup time is longer than
+     * IRC8M_STARTUP_TIMEOUT */
+    do {
+        timeout++;
+        stab_flag = (RCU_CTL0 & RCU_CTL0_IRC8MSTB);
+    } while ((0U == stab_flag) && (IRC8M_STARTUP_TIMEOUT != timeout));
+
+    /* if fail */
+    if (0U == (RCU_CTL0 & RCU_CTL0_IRC8MSTB)) {
+        while (1) {
+        }
+    }
+
+    FMC_WS = (FMC_WS & (~FMC_WS_WSCNT)) | WS_WSCNT_2;
+
     /* AHB = SYSCLK */
     RCU_CFG0 |= RCU_AHB_CKSYS_DIV1;
     /* APB2 = AHB */
     RCU_CFG0 |= RCU_APB2_CKAHB_DIV1;
     /* APB1 = AHB */
     RCU_CFG0 |= RCU_APB1_CKAHB_DIV1;
+    /* PLL = (IRC8M/2) * 18 = 72 MHz */
+    RCU_CFG0 &= ~(RCU_CFG0_PLLSEL | RCU_CFG0_PLLMF);
+    RCU_CFG0 |= (RCU_PLLSRC_IRC8M_DIV2 | RCU_PLL_MUL18);
 
-    /* select IRC8M as system clock */
+    /* enable PLL */
+    RCU_CTL0 |= RCU_CTL0_PLLEN;
+
+    /* wait until PLL is stable */
+    while (0U == (RCU_CTL0 & RCU_CTL0_PLLSTB)) {
+    }
+
+    /* select PLL as system clock */
     RCU_CFG0 &= ~RCU_CFG0_SCS;
-    RCU_CFG0 |= RCU_CKSYSSRC_IRC8M;
+    RCU_CFG0 |= RCU_CKSYSSRC_PLL;
 
-    /* wait until IRC8M is selected as system clock */
-    while (0U != (RCU_CFG0 & RCU_SCSS_IRC8M)) {
+    /* wait until PLL is selected as system clock */
+    while (0U == (RCU_CFG0 & RCU_SCSS_PLL)) {
     }
 }
 
@@ -174,7 +199,7 @@ static void system_clock_8m_irc8m(void)
 */
 static void system_clock_config(void)
 {
-    system_clock_8m_irc8m();
+    system_clock_72m_irc8m();
 }
 
 /*!

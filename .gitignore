@@ -1,0 +1,12 @@
+obj/
+downloads/
+tools/
+.vscode
+*.bin
+*.elf
+*.d
+*.hex
+*.log
+*~
+*.map
+*.o
