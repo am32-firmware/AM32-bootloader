@@ -11,9 +11,12 @@
 #define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
-  use 32k flash
+  use 32k flash by default. We allow for 128k as well so we can test
+  2k sectors with the AT-START-F415 devel board
  */
+#ifndef BOARD_FLASH_SIZE
 #define BOARD_FLASH_SIZE 32
+#endif
 
 
 #define GPIO_PIN(n) (1U<<(n))
