@@ -4,7 +4,7 @@
 
 #include "at32f421_flash.h"
 
-#define page_size 0x400 // 1 kb for f051
+#define page_size 0x400 // 1 kb for f421
 
 bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 {
