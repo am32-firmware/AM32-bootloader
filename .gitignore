@@ -10,3 +10,5 @@ tools/
 *~
 *.map
 *.o
+.DS_Store
+.vscode/settings.json
