@@ -23,7 +23,7 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 G431
+MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15
@@ -117,23 +117,28 @@ $(eval HEX_FILE := $(ELF_FILE:.elf=.hex))
 $(eval DEP_FILE := $(ELF_FILE:.elf=.d))
 $(eval TARGET := $(call BOOTLOADER_BASENAME,$(BUILD),$(PIN)))
 
+# get MCU specific compiler, objcopy and link script or use the ARM SDK one
+$(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
+$(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
+$(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $(LDSCRIPT_BL)))
+
 -include $(DEP_FILE)
 
 $(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS)
-$(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$$(LDSCRIPT_BL)
+$(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
 $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)echo building bootloader for $(BUILD) with pin $(PIN)
 	$$(QUIET)$$(MKDIR) -p $(OBJ)
 	$$(QUIET)echo Compiling $(notdir $$@)
-	$$(QUIET)$$(CC) $$(CFLAGS_BL) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL) -Os
+	$$(QUIET)$(xCC) $$(CFLAGS_BL) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
 	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
 
 # Generate bin and hex files
 $(HEX_FILE): $(ELF_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
-	$$(QUIET)$$(OBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
-	$$(QUIET)$$(OBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
+	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
+	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
 
 $(TARGET): $(HEX_FILE)
 
