@@ -12,7 +12,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "main.h"
+//#pragma GCC optimize("O0")
+
 #include <eeprom.h>
 
 //#define USE_ADC_INPUT      // will go right to application and ignore eeprom
