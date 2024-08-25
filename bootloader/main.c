@@ -25,6 +25,9 @@
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
 
+// optionally enable stats on serial bit-banging
+//#define SERIAL_STATS
+
 #include <string.h>
 
 #define STM32_FLASH_START 0x08000000
@@ -131,9 +134,9 @@ static uint16_t payload_buffer_size;
 static char incoming_payload_no_command;
 
 /* USER CODE BEGIN PFP */
-static void serialwriteChar(char data);
 static void sendString(uint8_t data[], int len);
 static void receiveBuffer();
+static void serialwriteChar(uint8_t data);
 
 #define BAUDRATE      19200
 #define BITTIME          52 // 1000000/BAUDRATE
@@ -231,8 +234,12 @@ static void setReceive()
 
 static void setTransmit()
 {
+    // set high before we set as output to guarantee idle high
     gpio_set(input_pin);
     gpio_mode_set_output(input_pin, GPIO_OUTPUT_PUSH_PULL);
+
+    // delay a bit to let the sender get setup for receiving
+    delayMicroseconds(BITTIME);
 }
 
 
@@ -467,26 +474,71 @@ static void decodeInput()
     setReceive();
 }
 
+#ifdef SERIAL_STATS
+// stats for debugging serial protocol
+struct {
+    uint32_t no_idle;
+    uint32_t no_start;
+    uint32_t bad_start;
+    uint32_t bad_stop;
+    uint32_t good;
+} stats;
+#endif
 
-static void serialreadChar()
+/*
+  read one byte from the input pin, 19200, not inverted, one stop bit
+
+  return false if we can't get a byte, or the byte has bad framing
+ */
+static bool serialreadChar()
 {
     rxbyte=0;
+    bl_timer_reset();
+
+    // UART is idle high, wait for it to be in the idle state
     while (!gpio_read(input_pin)) { // wait for rx to go high
-	if(bl_timer_us() > 20000){
+	if (bl_timer_us() > 20000) {
+	    /*
+	      if we don't get a command for 20ms then assume we should
+	      be trying to boot the main firmware, invalid_command 101
+	      triggers the jump immediately
+	     */
 	    invalid_command = 101;
-	    return;
+#ifdef SERIAL_STATS
+	    stats.no_idle++;
+#endif
+	    return false;
 	}
     }
 
-
-    while (gpio_read(input_pin)) {   // wait for it go go low
-	if(bl_timer_us() > 250 && messagereceived){
-	    return;
+    // now we need to wait for the start bit leading edge, which is low
+    bl_timer_reset();
+    while (gpio_read(input_pin)) {
+	if (bl_timer_us() > 20*BITTIME && messagereceived) {
+	    // we've been waiting too long, don't allow for long gaps
+	    // between bytes
+#ifdef SERIAL_STATS
+	    stats.no_start++;
+#endif
+	    return false;
 	}
     }
 
-    delayMicroseconds(HALFBITTIME);//wait to get the center of bit time
+    // wait to get the center of bit time. We want to sample at the
+    // middle of each bit
+    delayMicroseconds(HALFBITTIME);
+    if (gpio_read(input_pin)) {
+	// bad framing, we should be half-way through the start bit
+	// which should still be low
+#ifdef SERIAL_STATS
+	stats.bad_start++;
+#endif
+	return false;
+    }
 
+    /*
+      now sample the 8 data bits
+     */
     int bits_to_read = 0;
     while (bits_to_read < 8) {
 	delayMicroseconds(BITTIME);
@@ -494,31 +546,49 @@ static void serialreadChar()
 	bits_to_read++;
     }
 
-    delayMicroseconds(HALFBITTIME); //wait till the stop bit time begins
+    // wait till middle of stop bit, so we can check that too
+    delayMicroseconds(BITTIME);
+    if (!gpio_read(input_pin)) {
+	// bad framing, stop bit should be high
+#ifdef SERIAL_STATS
+	stats.bad_stop++;
+#endif
+	return false;
+    }
+
+    // we got a good byte
     messagereceived = 1;
     receiveByte = rxbyte;
+#ifdef SERIAL_STATS
+    stats.good++;
+#endif
+    return true;
 }
 
 
-void serialwriteChar(char data)
+static void serialwriteChar(uint8_t data)
 {
+    // start bit is low
     gpio_clear(input_pin);
-    char bits_to_read = 0;
-    while (bits_to_read < 8) {
-	delayMicroseconds(BITTIME);
+    delayMicroseconds(BITTIME);
+
+    // send data bits
+    uint8_t bits_written = 0;
+    while (bits_written < 8) {
 	if (data & 0x01) {
-	    //GPIO_BOP(input_port) = input_pin;
 	    gpio_set(input_pin);
 	} else {
 	    // GPIO_BC(input_port) = input_pin;
 	    gpio_clear(input_pin);
 	}
-	bits_to_read++;
+	bits_written++;
 	data = data >> 1;
+	delayMicroseconds(BITTIME);
     }
 
-    delayMicroseconds(BITTIME);
+    // send stop bit
     gpio_set(input_pin);
+    delayMicroseconds(BITTIME);
 }
 
 
@@ -526,7 +596,6 @@ static void sendString(uint8_t *data, int len)
 {
     for(int i = 0; i < len; i++){
 	serialwriteChar(data[i]);
-	delayMicroseconds(BITTIME);
     }
 }
 
@@ -536,8 +605,12 @@ static void receiveBuffer()
     messagereceived = 0;
     memset(rxBuffer, 0, sizeof(rxBuffer));
 
+    setReceive();
+
     for(int i = 0; i < sizeof(rxBuffer); i++){
-	serialreadChar();
+	if (!serialreadChar()) {
+	    break;
+	}
 
 	if(incoming_payload_no_command) {
 	    if(count == payload_buffer_size+2){
@@ -560,7 +633,9 @@ static void receiveBuffer()
 	    }
 	}
     }
-    decodeInput();
+    if (messagereceived) {
+	decodeInput();
+    }
 }
 
 #ifdef UPDATE_EEPROM_ENABLE
