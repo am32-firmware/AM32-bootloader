@@ -228,7 +228,7 @@ static char checkCrc(uint8_t* pBuff, uint16_t length)
 
 static void setReceive()
 {
-    gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
+    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
     received = 0;
 }
 
