@@ -22,6 +22,10 @@
 // analyser on the input pin)
 //#define BOOTLOADER_TEST_CLOCK
 
+// use this to check the string output code. When enabled
+// the string HELLO_WORLD is output every 10ms
+//#define BOOTLOADER_TEST_STRING
+
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
 
@@ -735,6 +739,20 @@ static void test_clock(void)
 }
 #endif // BOOTLOADER_TEST_CLOCK
 
+#ifdef BOOTLOADER_TEST_STRING
+/*
+  this should send HELLO_WORLD continuously
+ */
+static void test_string(void)
+{
+    setTransmit();
+    while (1) {
+        delayMicroseconds(10000);
+        sendString("HELLO_WORLD",11);
+    }
+}
+#endif // BOOTLOADER_TEST_STRING
+
 int main(void)
 {
     bl_clock_config();
@@ -743,6 +761,9 @@ int main(void)
 
 #ifdef BOOTLOADER_TEST_CLOCK
     test_clock();
+#endif
+#ifdef BOOTLOADER_TEST_STRING
+    test_string();
 #endif
 
     checkForSignal();
