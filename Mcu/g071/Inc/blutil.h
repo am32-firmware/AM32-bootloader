@@ -178,7 +178,7 @@ static inline void jump_to_application(void)
 {
     __disable_irq();
     bl_timer_disable();
-    const uint32_t app_address = STM32_FLASH_START + FIRMWARE_RELATIVE_START;
+    const uint32_t app_address = MCU_FLASH_START + FIRMWARE_RELATIVE_START;
     const uint32_t *app_data = (const uint32_t *)app_address;
     const uint32_t stack_top = app_data[0];
     const uint32_t JumpAddress = app_data[1];
