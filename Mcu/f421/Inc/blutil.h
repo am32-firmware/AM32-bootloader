@@ -10,7 +10,6 @@
  */
 #define RAM_BASE 0x20000000
 #define RAM_SIZE 16*1024
-#define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
   32k flash

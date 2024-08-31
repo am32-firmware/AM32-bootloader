@@ -11,7 +11,6 @@
  */
 #define RAM_BASE 0x20000000
 #define RAM_SIZE 36*1024
-#define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
   some boards have 128k flash, some have 64k flash. We default to 128 and
