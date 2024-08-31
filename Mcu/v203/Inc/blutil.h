@@ -4,11 +4,10 @@
 #pragma once
 
 /*
-  64k ram
+  20k ram
  */
 #define RAM_BASE 0x20000000
-#define RAM_SIZE 16*1024
-#define STACK_TOP RAM_BASE+RAM_SIZE
+#define RAM_SIZE 20*1024
 
 /*
   use 64k flash for now

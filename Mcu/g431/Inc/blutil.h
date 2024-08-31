@@ -13,7 +13,6 @@
  */
 #define RAM_BASE 0x20000000
 #define RAM_SIZE 32*1024
-#define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
   we have up to 512k of flash, but only use 64k for now

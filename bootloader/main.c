@@ -619,7 +619,7 @@ static void receiveBuffer()
 
     setReceive();
 
-    for(int i = 0; i < sizeof(rxBuffer); i++){
+    for(uint32_t i = 0; i < sizeof(rxBuffer); i++){
 	if (!serialreadChar()) {
 	    break;
 	}

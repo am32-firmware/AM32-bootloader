@@ -46,7 +46,8 @@ LIBS := -lnosys
 
 # Compiler options
 CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math --specs=nosys.specs
-CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -Wall -ffunction-sections -funsigned-char
+CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -ffunction-sections -funsigned-char
+CFLAGS_BASE += -Wall -Wextra -Wundef -Werror -Wno-unused-parameter
 
 CFLAGS_COMMON := $(CFLAGS_BASE)
 

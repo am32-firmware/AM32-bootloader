@@ -8,7 +8,6 @@
  */
 #define RAM_BASE 0x20000000
 #define RAM_SIZE 32*1024
-#define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
   use 32k flash by default. We allow for 128k as well so we can test

@@ -8,12 +8,13 @@
  */
 #define RAM_BASE 0x20000000
 #define RAM_SIZE 64*1024
-#define STACK_TOP RAM_BASE+RAM_SIZE
 
 /*
   we have 256k of flash, but only use 64k for now
  */
+#ifndef BOARD_FLASH_SIZE
 #define BOARD_FLASH_SIZE 64
+#endif
 
 #define GPIO_PIN(n) (1U<<(n))
 
