@@ -30,7 +30,9 @@
 
 #include <string.h>
 
-#define STM32_FLASH_START 0x08000000
+#ifndef MCU_FLASH_START
+#define MCU_FLASH_START 0x08000000
+#endif
 
 #ifndef FIRMWARE_RELATIVE_START
 #define FIRMWARE_RELATIVE_START 0x1000
@@ -70,18 +72,18 @@
   currently only support 32, 64 or 128 k flash
  */
 #if BOARD_FLASH_SIZE == 32
-#define EEPROM_START_ADD (STM32_FLASH_START+0x7c00)
+#define EEPROM_START_ADD (MCU_FLASH_START+0x7c00)
 static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x00,0x1f,0x06,0x06,0x01,0x30};
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 64
-#define EEPROM_START_ADD (STM32_FLASH_START+0xf800)
+#define EEPROM_START_ADD (MCU_FLASH_START+0xf800)
 static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x35,0x06,0x06,0x01,0x30};
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 128
 static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x2B,0x06,0x06,0x01,0x30};
-#define EEPROM_START_ADD (STM32_FLASH_START+0x1f800)
+#define EEPROM_START_ADD (MCU_FLASH_START+0x1f800)
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
 
 #else
@@ -90,7 +92,7 @@ static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x2B,0x06,0x06,0x01,0x30};
 
 typedef void (*pFunction)(void);
 
-#define APPLICATION_ADDRESS     (uint32_t)(STM32_FLASH_START + FIRMWARE_RELATIVE_START)
+#define APPLICATION_ADDRESS     (uint32_t)(MCU_FLASH_START + FIRMWARE_RELATIVE_START)
 
 
 #define CMD_RUN             0x00
@@ -168,7 +170,7 @@ static void jump()
     /*
       first word of the app is the stack pointer - make sure that it is in range
      */
-    const uint32_t *app = (uint32_t*)(STM32_FLASH_START + FIRMWARE_RELATIVE_START);
+    const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
     const uint32_t ram_start = 0x20000000;
     const uint32_t ram_limit_kb = 64;
     const uint32_t ram_end = ram_start+ram_limit_kb*1024;
@@ -370,7 +372,7 @@ static void decodeInput()
 
 	// will send Ack 0x30 and read input after transfer out callback
 	invalid_command = 0;
-	address = STM32_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
+	address = MCU_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
 	send_ACK();
 
 	return;
