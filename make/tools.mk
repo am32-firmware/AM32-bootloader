@@ -30,6 +30,8 @@ MKDIR:=mkdir
 RM:=rm
 CUT:=cut
 FGREP:=fgrep
+# no toolchain for building V203 on MacOS
+MCU_NOBUILD:=V203
 else
 # assume Linux
 OSDIR:=linux
