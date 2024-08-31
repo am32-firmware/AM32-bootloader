@@ -67,6 +67,8 @@
 #error "Bootloader comms pin not defined"
 #endif
 
+static uint16_t invalid_command;
+
 #include <blutil.h>
 
 #ifndef BOARD_FLASH_SIZE
@@ -118,7 +120,6 @@ static uint16_t low_pin_count;
 static char receiveByte;
 static int count;
 static char messagereceived;
-static uint16_t invalid_command;
 static uint16_t address_expected_increment;
 static int cmd;
 static char eeprom_req;
@@ -172,6 +173,7 @@ static void jump()
 	invalid_command = 0;
 	return;
     }
+#ifndef DISABLE_APP_HEADER_CHECKS
     /*
       first word of the app is the stack pointer - make sure that it is in range
      */
@@ -193,6 +195,7 @@ static void jump()
 	invalid_command = 0;
 	return;
     }
+#endif // DISABLE_APP_HEADER_CHECKS
     jump_to_application();
 #endif
 }
