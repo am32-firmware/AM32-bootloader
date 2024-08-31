@@ -10,6 +10,11 @@
 #define RAM_SIZE 20*1024
 
 /*
+  the first word of the app is not the stack address, disable the check in jump()
+ */
+#define DISABLE_APP_HEADER_CHECKS
+
+/*
   use 64k flash for now
  */
 #define BOARD_FLASH_SIZE 64
@@ -162,16 +167,15 @@ static inline void jump_to_application(void)
 {
     __disable_irq();
     bl_timer_disable();
-    const uint32_t app_address = MCU_FLASH_START + FIRMWARE_RELATIVE_START;
+    const uint32_t app_address = FIRMWARE_RELATIVE_START;
     const uint32_t stack_top = RAM_BASE + RAM_SIZE;
-    const uint32_t JumpAddress = app_address;
 
     // set the stack pointer and jump to the application
     asm volatile(
 	"mv sp, %0 \n"
 	"jr %1 \n"
         :                      // No output operands
-	: "r"(stack_top), "r"(JumpAddress)
+        : "r"(stack_top), "r"(app_address)
         :                      // No clobbered registers
     );
 }
