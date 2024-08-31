@@ -45,8 +45,8 @@ $(call INCLUDE_MCU_MAKEFILES)
 LIBS := -lnosys
 
 # Compiler options
-CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math
-CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -O2 -Wall -ffunction-sections
+CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math --specs=nosys.specs
+CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -Wall -ffunction-sections -funsigned-char
 
 CFLAGS_COMMON := $(CFLAGS_BASE)
 
