@@ -6,6 +6,7 @@
 
 
 ifeq ($(OS),Windows_NT)
+OSDIR:=windows
 ARM_SDK_PREFIX:=tools/windows/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-
 SHELL:=cmd.exe
 CP:=tools\\windows\\make\\bin\\cp
@@ -20,6 +21,7 @@ else
 # MacOS and Linux
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
+OSDIR:=macos
 ARM_SDK_PREFIX:=tools/macos/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-
 CP:=cp
 DSEP:=/
@@ -30,6 +32,7 @@ CUT:=cut
 FGREP:=fgrep
 else
 # assume Linux
+OSDIR:=linux
 ARM_SDK_PREFIX:=tools/linux/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-
 CP:=cp
 DSEP:=/

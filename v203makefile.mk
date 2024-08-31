@@ -1,7 +1,7 @@
 MCU := V203
 PART := CH32V203
 
-RISCV_SDK_PREFIX := tools/linux/riscv-embedded-gcc/bin/riscv-none-embed-
+RISCV_SDK_PREFIX := tools/$(OSDIR)/riscv-embedded-gcc/bin/riscv-none-embed-
 $(MCU)_CC := $(RISCV_SDK_PREFIX)gcc
 $(MCU)_OBJCOPY := $(RISCV_SDK_PREFIX)objcopy
 $(MCU)_LDSCRIPT := Mcu/v203/Link.ld
