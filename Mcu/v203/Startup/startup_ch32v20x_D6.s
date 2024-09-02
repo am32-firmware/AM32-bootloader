@@ -232,23 +232,5 @@ handle_reset:
 	addi a0, a0, 4
 	bltu a0, a1, 1b
 2:
-/* Configure pipelining and instruction prediction */
-    li t0, 0x1f
-    csrw 0xbc0, t0
-/* Enable interrupt nesting and hardware stack */
-	li t0, 0x3
-	csrw 0x804, t0
-/* Enable global interrupt and configure privileged mode */
-   	li t0, 0x88           
-   	csrw mstatus, t0
-/* Configure the interrupt vector table recognition mode and entry address mode */
- 	la t0, _vector_base
-    ori t0, t0, 3           
-	csrw mtvec, t0
-
     jal  SystemInit
-	la t0, main
-	csrw mepc, t0
-	mret
-
-
+    jal  main
