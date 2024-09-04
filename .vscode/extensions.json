@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "ms-vscode.cpptools",
+        "marus25.cortex-debug",
+        "ms-vscode.makefile-tools",
+        "ms-vscode.cpptools-extension-pack",
+        "mcu-debug.memory-view"
+    ]
+}
