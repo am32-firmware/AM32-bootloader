@@ -111,6 +111,7 @@ endef
 # list of targets formed using CREATE_BOOTLOADER_TARGET
 ALL_BUILDS :=
 
+####################################################################################
 # create a bootloader build target given a build in the form MCU or MCU_nK and a PIN
 define CREATE_BOOTLOADER_TARGET
 $(eval BUILD := $(1))
@@ -129,7 +130,7 @@ $(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $(LDSCRIPT_BL))
 
 -include $(DEP_FILE)
 
-$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS)
+$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DUSE_$(PIN) $(EXTRA_CFLAGS)
 $(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
 $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)echo building bootloader for $(BUILD) with pin $(PIN)
@@ -151,7 +152,48 @@ $(TARGET): $(HEX_FILE)
 ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
 endef
 
+
+#############################################
+# create a pinfinder build target given a MCU
+define CREATE_PINFINDER_TARGET
+$(eval MCU := $$(1))
+$(eval ELF_FILE := $(BIN_DIR)/PINFINDER_$(MCU).elf)
+$(eval HEX_FILE := $(ELF_FILE:.elf=.hex))
+$(eval DEP_FILE := $(ELF_FILE:.elf=.d))
+$(eval TARGET := PINFINDER_$(MCU))
+
+# get MCU specific compiler, objcopy and link script or use the ARM SDK one
+$(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
+$(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
+$(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $(LDSCRIPT_BL)))
+
+-include $(DEP_FILE)
+
+$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) $(EXTRA_CFLAGS)
+$(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
+$(ELF_FILE): $$(SRC_$(MCU)_BL) pin_finder/main.c
+	$$(QUIET)echo building pinfinder for $(MCU)
+	$$(QUIET)$$(MKDIR) -p $(OBJ)
+	$$(QUIET)echo Compiling $(notdir $$@)
+	$$(QUIET)$(xCC) $$(CFLAGS_BL) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) pin_finder/main.c
+	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
+	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
+
+# Generate bin and hex files
+$(HEX_FILE): $(ELF_FILE)
+	$$(QUIET)echo Generating $(notdir $$@)
+	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
+	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
+
+$(TARGET): $(HEX_FILE)
+
+# add to list
+ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
+endef
+
 $(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(BOOTLOADER_PINS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
+
+$(foreach BUILD,$(MCU_TYPES),$(eval $(call CREATE_PINFINDER_TARGET,$(BUILD))))
 
 bootloaders: $(ALL_BUILDS)
 
