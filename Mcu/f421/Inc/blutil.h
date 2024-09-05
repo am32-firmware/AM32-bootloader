@@ -57,6 +57,9 @@ static inline void bl_timer_init(void)
     BL_TIMER->div = 119;
     BL_TIMER->pr = 0xFFFF;
     BL_TIMER->ctrl1_bit.tmren = TRUE;
+    BL_TIMER->ctrl1_bit.clkdiv = TMR_CLOCK_DIV1;
+    BL_TIMER->ctrl1_bit.cnt_dir = TMR_COUNT_UP;
+    BL_TIMER->swevt_bit.ovfswtr = TRUE;
 }
 
 /*
