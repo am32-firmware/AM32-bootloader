@@ -608,14 +608,22 @@ static void serialwriteChar(uint8_t data)
 
     // send stop bit
     gpio_set(input_pin);
-    delayMicroseconds(BITTIME);
+
+    /*
+      note that we skip the delay by BITTIME for the full stop bit and
+      do it in sendString() instead to ensure when sending an ACK
+      immediately followed by a setReceive() on a slow MCU that we
+      start on the receive as soon as possible.
+    */
 }
 
 
 static void sendString(uint8_t *data, int len)
 {
     for(int i = 0; i < len; i++){
-	serialwriteChar(data[i]);
+        serialwriteChar(data[i]);
+        // for multi-byte writes we add the stop bit delay
+        delayMicroseconds(BITTIME);
     }
 }
 
