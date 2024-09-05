@@ -757,7 +757,7 @@ static void test_string(void)
     setTransmit();
     while (1) {
         delayMicroseconds(10000);
-        sendString("HELLO_WORLD",11);
+        sendString((uint8_t*)"HELLO_WORLD",11);
     }
 }
 #endif // BOOTLOADER_TEST_STRING
