@@ -131,6 +131,7 @@ static inline void bl_clock_config(void)
 static inline void bl_gpio_init(void)
 {
     LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+    LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
     LL_GPIO_ResetOutputPin(input_port, input_pin);
 }
 

@@ -134,6 +134,7 @@ static inline void bl_gpio_init(void)
     LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+    LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
 
     GPIO_InitStruct.Pin = input_pin;
     GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
