@@ -65,6 +65,9 @@ SRC_COMMON := $(foreach dir,$(SRC_DIRS_COMMON),$(wildcard $(dir)/*.[cs]))
 OBJ := obj
 BIN_DIR := $(ROOT)/$(OBJ)
 
+# find the SVD files
+$(foreach MCU,$(MCU_TYPES),$(eval SVD_$(MCU) := $(wildcard $(HAL_FOLDER_$(MCU))/*.svd)))
+
 .PHONY : clean all
 all : check_tools bootloaders
 
@@ -137,6 +140,7 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)echo Compiling $(notdir $$@)
 	$$(QUIET)$(xCC) $$(CFLAGS_BL) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
+	$$(QUIET)$$(CP) -f $$(SVD_$(MCU)) $$(OBJ)/debug.svd
 	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
 
 # Generate bin and hex files
