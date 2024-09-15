@@ -33,6 +33,20 @@
 // optionally enable stats on serial bit-banging
 //#define SERIAL_STATS
 
+/*
+  enable checking for software reset for jump.
+  generally on a software reset we do want to stay in the bootloader
+  if the signal pin is floating, but disabling this can be useful for
+  CAN testing
+*/
+#define CHECK_SOFTWARE_RESET 1
+
+/*
+  enable checking for eeprom configured before jump
+  disabling this can be useful for CAN development
+*/
+#define CHECK_EEPROM_BEFORE_JUMP 1
+
 #include <string.h>
 
 #ifndef MCU_FLASH_START
@@ -173,11 +187,13 @@ static void delayMicroseconds(uint32_t micros)
 static void jump()
 {
 #ifndef DISABLE_JUMP
+#if CHECK_EEPROM_BEFORE_JUMP
     uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
     if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
 	invalid_command = 0;
 	return;
     }
+#endif
 #ifndef DISABLE_APP_HEADER_CHECKS
     /*
       first word of the app is the stack pointer - make sure that it is in range
@@ -695,9 +711,13 @@ static void checkForSignal()
 	delayMicroseconds(10);
     }
     if (low_pin_count > 450) {
-	if (!bl_was_software_reset()) {
+#if CHECK_SOFTWARE_RESET
+        if (!bl_was_software_reset()) {
 	    jump();
-	}
+        }
+#else
+        jump();
+#endif
     }
 
     gpio_mode_set_input(input_pin, GPIO_PULL_UP);
