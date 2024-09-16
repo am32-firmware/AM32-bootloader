@@ -135,6 +135,8 @@ $(eval H_FILE := $(ELF_FILE:.elf=.h))
 $(eval BLU_ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_UPDATE_BASENAME_VER,$(BUILD),$(PIN)).elf)
 $(eval BLU_HEX_FILE := $(BLU_ELF_FILE:.elf=.hex))
 $(eval BLU_DEP_FILE := $(BLU_ELF_FILE:.elf=.d))
+$(eval BLU_BIN_FILE := $(BLU_ELF_FILE:.elf=.bin))
+$(eval BLU_AMJ_FILE := $(BLU_ELF_FILE:.elf=.amj))
 $(eval TARGET := $(call BOOTLOADER_BASENAME,$(BUILD),$(PIN)))
 $(eval BLU_TARGET := $(call BOOTLOADER_UPDATE_BASENAME,$(BUILD),$(PIN)))
 
@@ -159,7 +161,7 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
 
 $(H_FILE): $(BIN_FILE)
-	python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
+	$$(QUIET)python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
 
 $(BLU_ELF_FILE): CFLAGS_BLU := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
 $(BLU_ELF_FILE): LDFLAGS_BLU := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xBLU_LDSCRIPT)
@@ -183,9 +185,13 @@ $(BLU_HEX_FILE): $$(BLU_ELF_FILE)
 	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
 	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
 
+$(BLU_AMJ_FILE): $$(BLU_HEX_FILE)
+	$$(QUIET)echo Generating $(notdir $$@)
+	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --githash $(shell git rev-parse HEAD) $(BLU_HEX_FILE) $(BLU_AMJ_FILE)
+
 $(TARGET): $$(HEX_FILE)
 
-$(BLU_TARGET): $$(BLU_HEX_FILE)
+$(BLU_TARGET): $$(BLU_AMJ_FILE)
 
 # add to list
 ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
