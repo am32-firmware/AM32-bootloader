@@ -5,6 +5,7 @@ RISCV_SDK_PREFIX := tools/$(OSDIR)/riscv-embedded-gcc/bin/riscv-none-embed-
 $(MCU)_CC := $(RISCV_SDK_PREFIX)gcc
 $(MCU)_OBJCOPY := $(RISCV_SDK_PREFIX)objcopy
 $(MCU)_LDSCRIPT := Mcu/v203/Link.ld
+$(MCU)_LDSCRIPT_BLU := Mcu/v203/Link_BLU.ld
 
 MCU_LC := $(call lc,$(MCU))
 

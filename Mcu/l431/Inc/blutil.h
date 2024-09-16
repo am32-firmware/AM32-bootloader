@@ -148,6 +148,7 @@ void Error_Handler()
     while (1) {}
 }
 
+#ifdef FIRMWARE_RELATIVE_START
 /*
   jump from the bootloader to the application code
  */
@@ -170,6 +171,7 @@ static inline void jump_to_application(void)
         "bx	%1	\n"
 	: : "r"(stack_top), "r"(JumpAddress) :);
 }
+#endif // FIRMWARE_RELATIVE_START
 
 void SystemInit(void)
 {

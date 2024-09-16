@@ -11,10 +11,7 @@ IDENTIFIER := AM32
 
 # Folders
 HAL_FOLDER := Mcu
-MAIN_SRC_DIR := Src
 MAIN_INC_DIR := Inc
-
-SRC_DIRS_COMMON := $(MAIN_SRC_DIR)
 
 # Working directories
 ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
@@ -58,9 +55,6 @@ CFLAGS_COMMON := $(CFLAGS_BASE)
 # Linker options
 LDFLAGS_COMMON := -specs=nano.specs $(LIBS) -Wl,--gc-sections -Wl,--print-memory-usage
 
-# Search source files
-SRC_COMMON := $(foreach dir,$(SRC_DIRS_COMMON),$(wildcard $(dir)/*.[cs]))
-
 # configure some directories that are relative to wherever ROOT_DIR is located
 OBJ := obj
 BIN_DIR := $(ROOT)/$(OBJ)
@@ -89,7 +83,10 @@ clean :
 BOOTLOADER_VERSION := $(shell $(FGREP) "define BOOTLOADER_VERSION" $(MAIN_INC_DIR)/version.h | $(CUT) -d" " -f3 )
 
 SRC_BL := $(foreach dir,bootloader,$(wildcard $(dir)/*.[cs]))
+SRC_BLU := $(foreach dir,bl_update,$(wildcard $(dir)/*.[cs]))
+
 LDSCRIPT_BL := bootloader/ldscript_bl.ld
+LDSCRIPT_BLU := bl_update/ldscript_bl.ld
 
 # get a define in form -DBOARD_FLASH_SIZE=N if the target has a _NK suffix
 define flash_size_flag
@@ -106,13 +103,23 @@ define BOOTLOADER_BASENAME
 $(IDENTIFIER)_$(call base_mcu,$(1))_BOOTLOADER_$(2)$(call get_k_tag,$(1))
 endef
 
+define BOOTLOADER_UPDATE_BASENAME
+$(IDENTIFIER)_$(call base_mcu,$(1))_BL_UPDATER_$(2)$(call get_k_tag,$(1))
+endef
+
 # bootloader target names with version for filename
 define BOOTLOADER_BASENAME_VER
 $(call BOOTLOADER_BASENAME,$(1),$(2))_V$(BOOTLOADER_VERSION)
 endef
 
+# bootloader target names with version for filename
+define BOOTLOADER_UPDATE_BASENAME_VER
+$(call BOOTLOADER_UPDATE_BASENAME,$(1),$(2))_V$(BOOTLOADER_VERSION)
+endef
+
 # list of targets formed using CREATE_BOOTLOADER_TARGET
 ALL_BUILDS :=
+BLU_BUILDS :=
 
 # create a bootloader build target given a build in the form MCU or MCU_nK and a PIN
 define CREATE_BOOTLOADER_TARGET
@@ -123,14 +130,22 @@ $(eval EXTRA_CFLAGS := $(call flash_size_flag,$(1)))
 $(eval ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_BASENAME_VER,$(BUILD),$(PIN)).elf)
 $(eval HEX_FILE := $(ELF_FILE:.elf=.hex))
 $(eval DEP_FILE := $(ELF_FILE:.elf=.d))
+$(eval BIN_FILE := $(ELF_FILE:.elf=.bin))
+$(eval H_FILE := $(ELF_FILE:.elf=.h))
+$(eval BLU_ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_UPDATE_BASENAME_VER,$(BUILD),$(PIN)).elf)
+$(eval BLU_HEX_FILE := $(BLU_ELF_FILE:.elf=.hex))
+$(eval BLU_DEP_FILE := $(BLU_ELF_FILE:.elf=.d))
 $(eval TARGET := $(call BOOTLOADER_BASENAME,$(BUILD),$(PIN)))
+$(eval BLU_TARGET := $(call BOOTLOADER_UPDATE_BASENAME,$(BUILD),$(PIN)))
 
 # get MCU specific compiler, objcopy and link script or use the ARM SDK one
 $(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
 $(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
 $(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $(LDSCRIPT_BL)))
+$(eval xBLU_LDSCRIPT := $(if $($(MCU)_LDSCRIPT_BLU), $($(MCU)_LDSCRIPT_BLU), $(LDSCRIPT_BLU)))
 
 -include $(DEP_FILE)
+-include $(BLU_DEP_FILE)
 
 $(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS)
 $(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
@@ -143,21 +158,45 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL)
 	$$(QUIET)$$(CP) -f $$(SVD_$(MCU)) $$(OBJ)/debug.svd
 	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
 
+$(H_FILE): $(BIN_FILE)
+	python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
+
+$(BLU_ELF_FILE): CFLAGS_BLU := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
+$(BLU_ELF_FILE): LDFLAGS_BLU := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xBLU_LDSCRIPT)
+$(BLU_ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BLU) $(H_FILE)
+	$$(QUIET)echo building bootloader updater for $(BUILD) with pin $(PIN)
+	$$(QUIET)$$(MKDIR) -p $(OBJ)
+	$$(QUIET)echo Compiling $(notdir $$@)
+	$$(QUIET)$(xCC) $$(CFLAGS_BLU) $$(LDFLAGS_BLU) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BLU) -I. -DBL_HEADER_FILE=$(H_FILE)
+
 # Generate bin and hex files
-$(HEX_FILE): $(ELF_FILE)
+$(HEX_FILE): $$(ELF_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
 	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
 	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
 
-$(TARGET): $(HEX_FILE)
+$(BIN_FILE): $$(HEX_FILE)
+
+# Generate bin and hex files for bl updater
+$(BLU_HEX_FILE): $$(BLU_ELF_FILE)
+	$$(QUIET)echo Generating $(notdir $$@)
+	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
+	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
+
+$(TARGET): $$(HEX_FILE)
+
+$(BLU_TARGET): $$(BLU_HEX_FILE)
 
 # add to list
 ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
+BLU_BUILDS := $(BLU_BUILDS) $(BLU_TARGET)
 endef
 
 $(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(BOOTLOADER_PINS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
 
 bootloaders: $(ALL_BUILDS)
+
+updaters: $(BLU_BUILDS)
 
 # include the targets for installing tools
 include $(ROOT)/make/tools_install.mk
@@ -167,3 +206,7 @@ include $(ROOT)/make/tools_install.mk
 targets:
 	$(QUIET)echo List of targets. To build a target use 'make TARGETNAME'
 	$(QUIET)echo $(ALL_BUILDS)
+
+updater_targets:
+	$(QUIET)echo List of updater targets. To build a target use 'make TARGETNAME'
+	$(QUIET)echo $(BLU_BUILDS)
