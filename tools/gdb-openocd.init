@@ -1,0 +1,4 @@
+target extended-remote :3333
+set mem inaccessible-by-default off
+set print pretty
+set confirm off
