@@ -14,10 +14,18 @@ jobs:
           make arm_sdk_install
           make updaters -j8
 
-      - name: Archive build
+      - name: Archive build hex
         uses: actions/upload-artifact@v3
         with:
-          name: AM32-bootloader-updaters
+          name: AM32-bootloader-updaters-hex
           path: |
             obj/*_BL_UPDATER_*.hex
+          retention-days: 7
+
+      - name: Archive build amj
+        uses: actions/upload-artifact@v3
+        with:
+          name: AM32-bootloader-updaters-amj
+          path: |
+            obj/*_BL_UPDATER_*.amj
           retention-days: 7
