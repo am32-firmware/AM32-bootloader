@@ -47,6 +47,11 @@
 */
 #define CHECK_EEPROM_BEFORE_JUMP 1
 
+/*
+  should we update the bootloader version in eeprom?
+ */
+#define UPDATE_EEPROM_ENABLE 1
+
 #include <string.h>
 
 #ifndef MCU_FLASH_START
@@ -686,7 +691,7 @@ static void receiveBuffer()
 static void update_EEPROM()
 {
     read_flash_bin(rxBuffer , EEPROM_START_ADD , 48);
-    if(BOOTLOADER_VERSION != rxBuffer[2]) {
+    if (BOOTLOADER_VERSION != rxBuffer[2]) {
 	if (rxBuffer[2] == 0xFF || rxBuffer[2] == 0x00){
 	    return;
 	}
