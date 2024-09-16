@@ -1,0 +1,23 @@
+name: CI Build Bootloader updaters Linux
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: 'ubuntu-latest'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build CI Bootloader Updaters
+        run: |
+          make arm_sdk_install
+          make updaters -j8
+
+      - name: Archive build
+        uses: actions/upload-artifact@v3
+        with:
+          name: AM32-bootloader-updaters
+          path: |
+            obj/*_BL_UPDATER_*.hex
+          retention-days: 7
