@@ -70,28 +70,16 @@ int main(void)
     bl_clock_config();
     bl_timer_init();
 
-    // give 1.5s for debugger to attach
-    delayMicroseconds(1500000);
-
     // don't risk erasing the bootloader if it already matches
     if (memcmp((const void*)MCU_FLASH_START, bl_image, sizeof(bl_image)) != 0) {
+        // give 1.5s for debugger to attach
+        delayMicroseconds(1500000);
+
+        // do the flash
         flash_bootloader();
     }
 
-    /*
-      wipe eeprom header to ensure we don't boot this firmware
-      again. We wipe all 3 possible eeprom addresses for 32k, 64k and
-      128k boards
-
-      On boards with 32k of flash the 2nd two will fail. On boards
-      with 64k flash the last one will fail
-    */
-    const uint8_t zeros[8] = {0};
-    save_flash_nolib(zeros, sizeof(zeros), MCU_FLASH_START+0x7c00);
-    save_flash_nolib(zeros, sizeof(zeros), MCU_FLASH_START+0xf800);
-    save_flash_nolib(zeros, sizeof(zeros), MCU_FLASH_START+0x1f800);
-
-    // if we got here then reboot
+    // and reset
     NVIC_SystemReset();
 
     return 0;
