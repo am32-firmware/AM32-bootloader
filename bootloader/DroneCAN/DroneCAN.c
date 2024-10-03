@@ -27,6 +27,11 @@
 #define CANARD_POOL_SIZE 4096
 #endif
 
+#ifndef DRONECAN_DEBUG
+#define DRONECAN_DEBUG 0
+#endif
+
+// assume that main fw starts at 16k
 #define MAIN_FW_START_ADDR 0x08004000
 
 static CanardInstance canard;
@@ -106,6 +111,7 @@ static const uint8_t default_settings[] = {
 // printf to CAN LogMessage for debugging
 static void can_printf(const char *fmt, ...)
 {
+#if DRONECAN_DEBUG
     struct uavcan_protocol_debug_LogMessage pkt;
     memset(&pkt, 0, sizeof(pkt));
 
@@ -124,7 +130,8 @@ static void can_printf(const char *fmt, ...)
 		    UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_ID,
 		    &logmsg_transfer_id,
 		    CANARD_TRANSFER_PRIORITY_LOW,
-		    buffer, len);
+                    buffer, len);
+#endif
 }
 
 /*

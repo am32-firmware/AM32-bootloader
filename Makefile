@@ -20,7 +20,7 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203
+MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0
@@ -86,11 +86,19 @@ SRC_BL := $(foreach dir,bootloader,$(wildcard $(dir)/*.[cs]))
 SRC_BLU := $(foreach dir,bl_update,$(wildcard $(dir)/*.[cs]))
 
 LDSCRIPT_BL := bootloader/ldscript_bl.ld
+LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
 LDSCRIPT_BLU := bl_update/ldscript_bl.ld
 
-# get a define in form -DBOARD_FLASH_SIZE=N if the target has a _NK suffix
-define flash_size_flag
-$(if $(findstring _,$1),-DBOARD_FLASH_SIZE=$(subst K,,$(word 2,$(subst _, ,$1))))
+# Function to extract CFLAGS based on target name
+get_flash_size = $(if $(filter %K,$(word 2,$(subst _, ,$1))),-DBOARD_FLASH_SIZE=$(subst K,,$(word 2,$(subst _, ,$1))))
+
+# Function to check for _CAN suffix
+has_can_suffix = $(findstring _CAN,$1)
+
+# Function to return CFLAGS
+define get_cflags
+  $(call get_flash_size,$1) \
+  $(if $(call has_can_suffix,$1),-DDRONECAN_SUPPORT=1,-DDRONECAN_SUPPORT=0)
 endef
 
 # get a tag in the form _nK if the build has a _nK suffix
@@ -126,7 +134,7 @@ define CREATE_BOOTLOADER_TARGET
 $(eval BUILD := $(1))
 $(eval PIN := $(2))
 $(eval MCU := $$(call base_mcu,$$(1)))
-$(eval EXTRA_CFLAGS := $(call flash_size_flag,$(1)))
+$(eval EXTRA_CFLAGS := $(call get_cflags,$(1)))
 $(eval ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_BASENAME_VER,$(BUILD),$(PIN)).elf)
 $(eval HEX_FILE := $(ELF_FILE:.elf=.hex))
 $(eval DEP_FILE := $(ELF_FILE:.elf=.d))
@@ -143,19 +151,21 @@ $(eval BLU_TARGET := $(call BOOTLOADER_UPDATE_BASENAME,$(BUILD),$(PIN)))
 # get MCU specific compiler, objcopy and link script or use the ARM SDK one
 $(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
 $(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
-$(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $(LDSCRIPT_BL)))
+$(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $$(if $$(call has_can_suffix,$$(BUILD)),$(LDSCRIPT_BL_CAN),$(LDSCRIPT_BL))))
 $(eval xBLU_LDSCRIPT := $(if $($(MCU)_LDSCRIPT_BLU), $($(MCU)_LDSCRIPT_BLU), $(LDSCRIPT_BLU)))
+$(eval CFLAGS_DRONECAN := $$(if $$(call has_can_suffix,$$(1)),$$(CFLAGS_DRONECAN_L431)))
+$(eval SRC_DRONECAN := $(if $(call has_can_suffix,$(1)),$(SRC_DRONECAN_$(MCU))))
 
 -include $(DEP_FILE)
 -include $(BLU_DEP_FILE)
 
-$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS)
+$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -DAM32_MCU=\"$(MCU)\" $$(CFLAGS_DRONECAN)
 $(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
-$(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL)
+$(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 	$$(QUIET)echo building bootloader for $(BUILD) with pin $(PIN)
 	$$(QUIET)$$(MKDIR) -p $(OBJ)
 	$$(QUIET)echo Compiling $(notdir $$@)
-	$$(QUIET)$(xCC) $$(CFLAGS_BL) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL)
+	$$(QUIET)$(xCC) $$(CFLAGS_BL) $(CFLAGS_DRONECAN) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL) $(SRC_DRONECAN)
 	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
 	$$(QUIET)$$(CP) -f $$(SVD_$(MCU)) $$(OBJ)/debug.svd
 	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
