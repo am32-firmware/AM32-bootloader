@@ -20,6 +20,7 @@
 
 #define GPIO_PIN(n) (1U<<(n))
 
+#ifdef PORT_LETTER
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
     if (pin < GPIO_PIN(8)) {
@@ -59,6 +60,7 @@ static inline bool gpio_read(uint32_t pin)
 {
     return (input_port->idt & pin) != 0;
 }
+#endif // PORT_LETTER
 
 #define BL_TIMER TMR3
 
@@ -76,6 +78,7 @@ static inline void bl_timer_init(void)
     BL_TIMER->ctrl1_bit.tmren = TRUE;
 }
 
+#ifdef PORT_LETTER
 unsigned int system_core_clock           = HICK_VALUE; /*!< system clock frequency (core clock) */
 
 /*
@@ -100,6 +103,7 @@ void system_core_clock_update(void)
     /* ahbclk frequency */
     system_core_clock = system_core_clock >> div_value;
 }
+#endif // PORT_LETTER
 
 /*
   initialise clocks
@@ -157,6 +161,7 @@ static inline void bl_clock_config(void)
     system_core_clock_update();
 }
 
+#ifdef PORT_LETTER
 static inline void bl_gpio_init(void)
 {
     crm_periph_clock_enable(CRM_GPIOA_PERIPH_CLOCK, TRUE);
@@ -175,6 +180,7 @@ static inline void bl_gpio_init(void)
 
     gpio_init(input_port, &gpio_init_struct);
 }
+#endif // PORT_LETTER
 
 /*
   disable timer ready for app start
@@ -202,6 +208,7 @@ static inline bool bl_was_software_reset(void)
     return crm_flag_get(CRM_SW_RESET_FLAG) == SET;
 }
 
+#ifdef PORT_LETTER
 /*
   no need for any action in SystemInit
  */
@@ -228,3 +235,4 @@ static inline void jump_to_application(void)
         "bx	%1	\n"
 	: : "r"(stack_top), "r"(JumpAddress) :);
 }
+#endif // PORT_LETTER

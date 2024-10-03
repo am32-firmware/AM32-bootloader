@@ -59,7 +59,11 @@
 #endif
 
 #ifndef FIRMWARE_RELATIVE_START
+#if DRONECAN_SUPPORT
+#define FIRMWARE_RELATIVE_START 0x4000
+#else
 #define FIRMWARE_RELATIVE_START 0x1000
+#endif
 #endif
 
 #ifdef USE_PA2
@@ -94,6 +98,10 @@
 static uint16_t invalid_command;
 
 #include <blutil.h>
+
+#if DRONECAN_SUPPORT
+#include "DroneCAN/DroneCAN.h"
+#endif
 
 #ifndef BOARD_FLASH_SIZE
 #error "must define BOARD_FLASH_SIZE"
@@ -572,14 +580,19 @@ static bool serialreadChar()
     // now we need to wait for the start bit leading edge, which is low
     bl_timer_reset();
     while (gpio_read(input_pin)) {
-	if (bl_timer_us() > 5*BITTIME && messagereceived) {
-	    // we've been waiting too long, don't allow for long gaps
-	    // between bytes
-#ifdef SERIAL_STATS
-	    stats.no_start++;
+        if (bl_timer_us() > 5*BITTIME) {
+#if DRONECAN_SUPPORT
+            DroneCAN_update();
 #endif
-	    return false;
-	}
+            if (messagereceived) {
+                // we've been waiting too long, don't allow for long gaps
+                // between bytes
+#ifdef SERIAL_STATS
+                stats.no_start++;
+#endif
+                return false;
+            }
+        }
     }
 
     // wait to get the center of bit time. We want to sample at the
@@ -841,6 +854,9 @@ int main(void)
 	  receiveBuffer();
 	  if (invalid_command > 100) {
 	      jump();
-	  }
+          }
+#if DRONECAN_SUPPORT
+          DroneCAN_update();
+#endif
     }
 }
