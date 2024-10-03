@@ -19,6 +19,7 @@ CFLAGS_$(MCU) := \
 CFLAGS_$(MCU) += \
 	-DHSE_VALUE=8000000 \
 	-D$(PART) \
+	-DMCU_$(MCU) \
 	-DHSE_STARTUP_TIMEOUT=100 \
 	-DLSE_STARTUP_TIMEOUT=5000 \
 	-DLSE_VALUE=32768 \
@@ -32,3 +33,17 @@ CFLAGS_$(MCU) += \
 
 SRC_$(MCU)_BL := $(foreach dir,$(SRC_BASE_DIR_$(MCU)),$(wildcard $(dir)/*.[cs])) \
 	$(wildcard $(HAL_FOLDER_$(MCU))/Src/*.c)
+
+# additional CFLAGS and source for DroneCAN
+CFLAGS_DRONECAN_$(MCU) += \
+	-Ibootloader/DroneCAN \
+	-Ibootloader/DroneCAN/libcanard \
+	-Ibootloader/DroneCAN/libcanard/drivers/stm32 \
+	-Ibootloader/DroneCAN/dsdl_generated/include
+
+SRC_DIR_DRONECAN_$(MCU) += bootloader/DroneCAN \
+		bootloader/DroneCAN/dsdl_generated/src \
+		bootloader/DroneCAN/libcanard \
+		bootloader/DroneCAN/libcanard/drivers/stm32
+
+SRC_DRONECAN_$(MCU) := $(foreach dir,$(SRC_DIR_DRONECAN_$(MCU)),$(wildcard $(dir)/*.[cs]))

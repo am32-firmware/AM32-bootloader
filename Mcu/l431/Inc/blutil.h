@@ -24,6 +24,7 @@
 
 #define GPIO_OUTPUT_PUSH_PULL LL_GPIO_OUTPUT_PUSHPULL
 
+#ifdef PORT_LETTER
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
     LL_GPIO_SetPinMode(input_port, pin, LL_GPIO_MODE_INPUT);
@@ -50,6 +51,7 @@ static inline bool gpio_read(uint32_t pin)
 {
     return LL_GPIO_IsInputPinSet(input_port, pin);
 }
+#endif // PORT_LETTER
 
 #define BL_TIMER TIM2
 
@@ -128,6 +130,7 @@ static inline void bl_clock_config(void)
     LL_RCC_SetAPB2Prescaler(LL_RCC_APB2_DIV_1);
 }
 
+#ifdef PORT_LETTER
 static inline void bl_gpio_init(void)
 {
     LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
@@ -204,3 +207,4 @@ void SystemInit(void)
   /* Disable all interrupts */
   RCC->CIER = 0x00000000U;
 }
+#endif // PORT_LETTER

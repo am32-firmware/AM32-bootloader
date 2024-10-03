@@ -12,7 +12,7 @@
 #include <at32f415_crm.h>
 
 
-#pragma GCC optimize("O0")
+//#pragma GCC optimize("O0")
 
 /*
   usleep is needed by canard_stm32.c startup code
