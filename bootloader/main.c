@@ -99,27 +99,48 @@ static uint16_t invalid_command;
 #error "must define BOARD_FLASH_SIZE"
 #endif
 
+#define PIN_CODE (PORT_LETTER << 4 | PIN_NUMBER)
+
 /*
   currently only support 32, 64 or 128 k flash
  */
 #if BOARD_FLASH_SIZE == 32
 #define EEPROM_START_ADD (MCU_FLASH_START+0x7c00)
-static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x00,0x1f,0x06,0x06,0x01,0x30};
+#define FLASH_SIZE_CODE 0x1f
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 64
 #define EEPROM_START_ADD (MCU_FLASH_START+0xf800)
-static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x35,0x06,0x06,0x01,0x30};
+#define FLASH_SIZE_CODE 0x35
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 128
-static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x2B,0x06,0x06,0x01,0x30};
 #define EEPROM_START_ADD (MCU_FLASH_START+0x1f800)
+#define FLASH_SIZE_CODE 0x2B
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
-
 #else
 #error "unsupported BOARD_FLASH_SIZE"
 #endif
+
+/*
+  the devinfo structure tells the configuration client our pin code,
+  flash size and device type. It can also be used by the main firmware
+  to confirm we have the right eeprom address and pin code. We have 2
+  32bit magic values so the main firmware can confirm the bootloader
+  supports this feature
+ */
+#define DEVINFO_MAGIC1 0x5925e3da
+#define DEVINFO_MAGIC2 0x4eb863d9
+
+static const struct {
+    uint32_t magic1;
+    uint32_t magic2;
+    const uint8_t deviceInfo[9];
+} devinfo __attribute__((section(".devinfo"))) = {
+        .magic1 = DEVINFO_MAGIC1,
+        .magic2 = DEVINFO_MAGIC2,
+        .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,0x01,0x30}
+};
 
 typedef void (*pFunction)(void);
 
@@ -150,10 +171,6 @@ static char eeprom_req;
 static int received;
 
 
-static uint8_t pin_code = PORT_LETTER << 4 | PIN_NUMBER;
-
-
-
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static char rxbyte;
@@ -171,7 +188,7 @@ static uint16_t payload_buffer_size;
 static char incoming_payload_no_command;
 
 /* USER CODE BEGIN PFP */
-static void sendString(uint8_t data[], int len);
+static void sendString(const uint8_t data[], int len);
 static void receiveBuffer();
 static void serialwriteChar(uint8_t data);
 
@@ -308,7 +325,7 @@ static void send_BAD_CRC_ACK()
 static void sendDeviceInfo()
 {
     setTransmit();
-    sendString(deviceInfo,9);
+    sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
     setReceive();
 }
 
@@ -639,7 +656,7 @@ static void serialwriteChar(uint8_t data)
 }
 
 
-static void sendString(uint8_t *data, int len)
+static void sendString(const uint8_t *data, int len)
 {
     for(int i = 0; i < len; i++){
         serialwriteChar(data[i]);
@@ -815,8 +832,6 @@ int main(void)
 #ifdef USE_ADC_INPUT  // go right to application
     jump();
 #endif
-
-    deviceInfo[3] = pin_code;
 
 #ifdef UPDATE_EEPROM_ENABLE
      update_EEPROM();
