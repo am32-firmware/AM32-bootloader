@@ -12,7 +12,8 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 4K
+FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 4K-32
+DEVINFO (r)     : ORIGIN = ORIGIN(FLASH)+LENGTH(FLASH), LENGTH = 32
 RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 4K
 }
 
@@ -27,7 +28,14 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
-  /* The program code and other data goes into FLASH */
+  .devinfo :
+  {
+    . = ALIGN(4);
+        KEEP (*(.devinfo))
+    . = ALIGN(4);
+  } >DEVINFO
+
+/* The program code and other data goes into FLASH */
   .text :
   {
     . = ALIGN(4);
