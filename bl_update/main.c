@@ -38,8 +38,8 @@ static void delayMicroseconds(uint32_t micros)
 {
     while (micros > 0) {
         uint32_t us = micros>10000?10000:micros;
-        bl_timer_reset();
-        while (bl_timer_us() < us) ;
+        const uint32_t us_start = bl_timer_us();
+        while (bl_timer_us() - us_start < us) ;
         micros -= us;
     }
 }
