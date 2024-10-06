@@ -178,7 +178,6 @@ static int cmd;
 static char eeprom_req;
 static int received;
 
-
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static char rxbyte;
@@ -582,7 +581,9 @@ static bool serialreadChar()
     while (gpio_read(input_pin)) {
         if (bl_timer_us() > 5*BITTIME) {
 #if DRONECAN_SUPPORT
-            DroneCAN_update();
+            if (DroneCAN_update()) {
+                jump();
+            }
 #endif
             if (messagereceived) {
                 // we've been waiting too long, don't allow for long gaps
@@ -740,8 +741,7 @@ static void checkForSignal()
     for(int i = 0 ; i < 500; i ++){
 	if(!gpio_read(input_pin)){
 	    low_pin_count++;
-	}else{
-	}
+        }
 
 	delayMicroseconds(10);
     }
@@ -783,9 +783,6 @@ static void checkForSignal()
 	}
 
 	delayMicroseconds(10);
-    }
-    if (low_pin_count == 0) {
-	return;            // when floated all
     }
 
     if (low_pin_count > 0) {
@@ -856,7 +853,9 @@ int main(void)
 	      jump();
           }
 #if DRONECAN_SUPPORT
-          DroneCAN_update();
+          if (DroneCAN_update()) {
+              jump();
+          }
 #endif
     }
 }

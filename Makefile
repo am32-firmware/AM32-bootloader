@@ -98,7 +98,7 @@ has_can_suffix = $(findstring _CAN,$1)
 # Function to return CFLAGS
 define get_cflags
   $(call get_flash_size,$1) \
-  $(if $(call has_can_suffix,$1),-DDRONECAN_SUPPORT=1,-DDRONECAN_SUPPORT=0)
+  $(if $(call has_can_suffix,$1),-DDRONECAN_SUPPORT=1 -DBOARD_FLASH_SIZE=128,-DDRONECAN_SUPPORT=0)
 endef
 
 # get a tag in the form _nK if the build has a _nK suffix
