@@ -37,6 +37,16 @@
 static CanardInstance canard;
 static uint8_t canard_memory_pool[CANARD_POOL_SIZE];
 
+#ifndef MCU_FLASH_START
+#define MCU_FLASH_START 0x08000000
+#endif
+
+#if BOARD_FLASH_SIZE == 128
+#define EEPROM_START_ADD (MCU_FLASH_START+0x1f800)
+#else
+#error "Only 128K flash size supported for DroneCAN"
+#endif
+
 /*
   keep the state for firmware update
 */
@@ -47,6 +57,8 @@ static struct {
     uint32_t last_read_ms;
     uint32_t offset;
 } fwupdate;
+
+static bool have_raw_command;
 
 static void can_printf(const char *fmt, ...);
 
@@ -100,13 +112,11 @@ static uint32_t millis32(void)
 /*
   default settings, based on public/assets/eeprom_default.bin in AM32 configurator
  */
-#if 0
 static const uint8_t default_settings[] = {
     0x01, 0x02, 0x01, 0x01, 0x23, 0x4e, 0x45, 0x4f, 0x45, 0x53, 0x43, 0x20, 0x66, 0x30, 0x35, 0x31,
     0x20, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x02, 0x18, 0x64, 0x37, 0x0e, 0x00, 0x00, 0x05, 0x00,
     0x80, 0x80, 0x80, 0x32, 0x00, 0x32, 0x00, 0x00, 0x0f, 0x0a, 0x0a, 0x8d, 0x66, 0x06, 0x00, 0x00
 };
-#endif
 
 // printf to CAN LogMessage for debugging
 static void can_printf(const char *fmt, ...)
@@ -132,6 +142,41 @@ static void can_printf(const char *fmt, ...)
 		    CANARD_TRANSFER_PRIORITY_LOW,
                     buffer, len);
 #endif
+}
+
+/*
+  handle parameter executeopcode request
+*/
+static void handle_param_ExecuteOpcode(CanardInstance* ins, CanardRxTransfer* transfer)
+{
+    struct uavcan_protocol_param_ExecuteOpcodeRequest req;
+    if (uavcan_protocol_param_ExecuteOpcodeRequest_decode(transfer, &req)) {
+        return;
+    }
+    struct uavcan_protocol_param_ExecuteOpcodeResponse pkt;
+    memset(&pkt, 0, sizeof(pkt));
+
+    pkt.ok = false;
+
+    if (req.opcode == UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_REQUEST_OPCODE_ERASE) {
+        can_printf("resetting to defaults");
+        save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);
+        pkt.ok = true;
+    }
+
+
+    uint8_t buffer[UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_RESPONSE_MAX_SIZE];
+    uint16_t total_size = uavcan_protocol_param_ExecuteOpcodeResponse_encode(&pkt, buffer);
+
+    canardRequestOrRespond(ins,
+                           transfer->source_node_id,
+                           UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_SIGNATURE,
+                           UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_ID,
+                           &transfer->transfer_id,
+                           transfer->priority,
+                           CanardResponse,
+                           &buffer[0],
+                           total_size);
 }
 
 /*
@@ -437,6 +482,10 @@ static void onTransferReceived(CanardInstance *ins, CanardRxTransfer *transfer)
 	    handle_begin_firmware_update(ins, transfer);
 	    break;
 	}
+        case UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_ID: {
+            handle_param_ExecuteOpcode(ins, transfer);
+            break;
+        }
 	}
     }
     if (transfer->transfer_type == CanardTransferTypeResponse) {
@@ -488,6 +537,10 @@ static bool shouldAcceptTransfer(const CanardInstance *ins,
 	    *out_data_type_signature = UAVCAN_PROTOCOL_FILE_BEGINFIRMWAREUPDATE_SIGNATURE;
 	    return true;
 	}
+        case UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_ID: {
+            *out_data_type_signature = UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_SIGNATURE;
+            return true;
+        }
 	}
     }
     if (transfer_type == CanardTransferTypeResponse) {
@@ -504,6 +557,10 @@ static bool shouldAcceptTransfer(const CanardInstance *ins,
         case UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_ID: {
             *out_data_type_signature = UAVCAN_PROTOCOL_DYNAMIC_NODE_ID_ALLOCATION_SIGNATURE;
             return true;
+        }
+        case UAVCAN_EQUIPMENT_ESC_RAWCOMMAND_ID: {
+            // we are receiving RawCommand, we should boot to the main firmware
+            have_raw_command = true;
         }
         }
     }
@@ -609,7 +666,10 @@ static void DroneCAN_Startup(void)
     canardSetLocalNodeID(&canard, 0);
 }
 
-void DroneCAN_update()
+/*
+  handle DroneCAN packets. Return true if we are ready to boot the main firmware
+ */
+bool DroneCAN_update()
 {
     static uint64_t next_1hz_service_at;
     static bool done_startup;
@@ -629,7 +689,7 @@ void DroneCAN_update()
 	    request_DNA();
 	}
         sys_can_enable_IRQ();
-	return;
+        return false;
     }
 
     const uint64_t ts = micros64();
@@ -646,6 +706,8 @@ void DroneCAN_update()
     DroneCAN_processTxQueue();
 
     sys_can_enable_IRQ();
+
+    return have_raw_command;
 }
 
 #endif // DRONECAN_SUPPORT
