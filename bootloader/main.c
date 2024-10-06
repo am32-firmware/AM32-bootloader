@@ -101,6 +101,7 @@ static uint16_t invalid_command;
 
 #if DRONECAN_SUPPORT
 #include "DroneCAN/DroneCAN.h"
+#include "DroneCAN/sys_can.h"
 #endif
 
 #ifndef BOARD_FLASH_SIZE
@@ -246,6 +247,11 @@ static void jump()
 	return;
     }
 #endif // DISABLE_APP_HEADER_CHECKS
+
+#if DRONECAN_SUPPORT
+    sys_can_disable_IRQ();
+#endif
+
     jump_to_application();
 #endif
 }
