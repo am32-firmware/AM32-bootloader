@@ -207,10 +207,23 @@ static void serialwriteChar(uint8_t data);
 #define BITTIME          52 // 1000000/BAUDRATE
 #define HALFBITTIME      26 // 500000/BAUDRATE
 
+// used for timing bytes
+static uint32_t us_start;
+
+static void bl_timer_reset(void)
+{
+    us_start = bl_timer_us();
+}
+
+static uint32_t bl_timer_elapsed(void)
+{
+    return bl_timer_us() - us_start;
+}
+
 static void delayMicroseconds(uint32_t micros)
 {
     bl_timer_reset();
-    while (bl_timer_us() < micros) {
+    while (bl_timer_elapsed() < micros) {
     }
 }
 
@@ -577,7 +590,7 @@ static bool serialreadChar()
 
     // UART is idle high, wait for it to be in the idle state
     while (!gpio_read(input_pin)) { // wait for rx to go high
-	if (bl_timer_us() > 20000) {
+        if (bl_timer_elapsed() > 20000U) {
 	    /*
 	      if we don't get a command for 20ms then assume we should
 	      be trying to boot the main firmware, invalid_command 101
@@ -594,7 +607,7 @@ static bool serialreadChar()
     // now we need to wait for the start bit leading edge, which is low
     bl_timer_reset();
     while (gpio_read(input_pin)) {
-        if (bl_timer_us() > 5*BITTIME) {
+        if (bl_timer_elapsed() > 5*BITTIME) {
 #if DRONECAN_SUPPORT
             if (DroneCAN_update()) {
                 jump();
@@ -714,7 +727,7 @@ static void receiveBuffer()
 	    rxBuffer[i] = rxbyte;
 	    count++;
 	} else {
-	    if(bl_timer_us() > 250){
+            if(bl_timer_elapsed() > 250){
 	
 		count = 0;
 
@@ -814,11 +827,11 @@ static void test_clock(void)
     setTransmit();
     while (1) {
 	gpio_clear(input_pin);
-	bl_timer_reset();
-	while (bl_timer_us() < 2000) ;
+        bl_timer_reset();
+        while (bl_timer_elapsed() < 2000) ;
 	gpio_set(input_pin);
-	bl_timer_reset();
-	while (bl_timer_us() < 1000) ;
+        bl_timer_reset();
+        while (bl_timer_elapsed() < 1000) ;
     }
 }
 #endif // BOOTLOADER_TEST_CLOCK
