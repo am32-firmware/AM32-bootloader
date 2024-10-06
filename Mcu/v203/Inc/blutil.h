@@ -121,11 +121,6 @@ static inline uint32_t bl_timer_us(void)
     return BL_TIMER->CNT;
 }
 
-static inline void bl_timer_reset(void)
-{
-    BL_TIMER->CNT = 0;
-}
-
 /*
   initialise clocks
  */
