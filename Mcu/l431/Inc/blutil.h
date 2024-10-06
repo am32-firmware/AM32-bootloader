@@ -105,12 +105,18 @@ static inline void bl_clock_config(void)
     LL_FLASH_SetLatency(LL_FLASH_LATENCY_4);
     while (LL_FLASH_GetLatency()!= LL_FLASH_LATENCY_4) ;
     LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
+
     while (LL_PWR_IsActiveFlag_VOS() != 0) ;
     LL_RCC_MSI_Enable();
+    LL_RCC_LSI_Enable();
 
-    /* Wait till MSI is ready */
+    /* Wait till MSI and LSI are ready */
+    while (LL_RCC_LSI_IsReady() != 1) ;
     while (LL_RCC_MSI_IsReady() != 1) ;
 
+    LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSI);
+    LL_RCC_EnableRTC();
+    
     LL_RCC_MSI_EnableRangeSelection();
     LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_6);
     LL_RCC_MSI_SetCalibTrimming(0);
@@ -206,5 +212,9 @@ void SystemInit(void)
 
   /* Disable all interrupts */
   RCC->CIER = 0x00000000U;
+
+  // enable the backup domain
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+  LL_PWR_EnableBkUpAccess();
 }
 #endif // PORT_LETTER

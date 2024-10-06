@@ -184,6 +184,7 @@ static void handle_param_ExecuteOpcode(CanardInstance* ins, CanardRxTransfer* tr
 */
 static void handle_RestartNode(CanardInstance* ins, CanardRxTransfer* transfer)
 {
+    set_rtc_backup_register(0, 0);
     // reboot the ESC
     NVIC_SystemReset();
 }
@@ -345,6 +346,7 @@ static void handle_file_read_response(CanardInstance* ins, CanardRxTransfer* tra
 	/* firmware updare done */
 	can_printf("Firmwate update complete\n");
 	fwupdate.node_id = 0;
+        set_rtc_backup_register(0, 0);
         NVIC_SystemReset();
 	return;
     }
@@ -663,7 +665,16 @@ static void DroneCAN_Startup(void)
 	       shouldAcceptTransfer,              // Callback, see CanardShouldAcceptTransfer
 	       NULL);
 
-    canardSetLocalNodeID(&canard, 0);
+    /*
+      if doing fw update get node ID from main firmware via RTC backup
+      register
+     */
+    uint8_t node_id = 0;
+    const uint32_t rtc0 = get_rtc_backup_register(0);
+    if ((rtc0 & 0xFFFFFFU) == RTC_BKUP0_FWUPDATE) {
+        node_id = rtc0 >> 24;
+    }
+    canardSetLocalNodeID(&canard, node_id);
 }
 
 /*
