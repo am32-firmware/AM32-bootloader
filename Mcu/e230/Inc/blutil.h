@@ -75,11 +75,6 @@ static inline uint32_t bl_timer_us(void)
     return timer_counter_read(BL_TIMER);
 }
 
-static inline void bl_timer_reset(void)
-{
-    timer_counter_value_config(BL_TIMER, 0);
-}
-
 /*
   initialise clocks
  */
