@@ -27,6 +27,9 @@
 // the string HELLO_WORLD is output every 10ms
 //#define BOOTLOADER_TEST_STRING
 
+// use this to check the backup domain registers work
+//#define BOOTLOADER_TEST_BKUP
+
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
 
@@ -834,6 +837,24 @@ static void test_string(void)
 }
 #endif // BOOTLOADER_TEST_STRING
 
+
+#ifdef BOOTLOADER_TEST_BKUP
+/*
+  test operation of backup domain registers
+ */
+volatile uint32_t bkup_value;
+static void test_rtc_backup(void)
+{
+    uint32_t v = 0;
+    while (true) {
+        bkup_value++;
+        set_rtc_backup_register(0, bkup_value);
+        bkup_value = get_rtc_backup_register(0);
+        delayMicroseconds(1000);
+    }
+}
+#endif
+
 int main(void)
 {
     bl_clock_config();
@@ -845,6 +866,9 @@ int main(void)
 #endif
 #ifdef BOOTLOADER_TEST_STRING
     test_string();
+#endif
+#ifdef BOOTLOADER_TEST_BKUP
+    test_rtc_backup();
 #endif
 
     checkForSignal();
