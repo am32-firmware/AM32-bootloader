@@ -249,6 +249,12 @@ static void jump()
 #endif // DISABLE_APP_HEADER_CHECKS
 
 #if DRONECAN_SUPPORT
+    if ((get_rtc_backup_register(0) & 0xFFFFFFU) == RTC_BKUP0_FWUPDATE) {
+        // waiting for firmware update
+        invalid_command = 0;
+        return;
+    }
+
     sys_can_disable_IRQ();
 #endif
 
