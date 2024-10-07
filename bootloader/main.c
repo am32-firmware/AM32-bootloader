@@ -193,8 +193,6 @@ typedef union __attribute__ ((packed)) {
 } uint8_16_u;
 
 static uint16_t len;
-static uint8_t calculated_crc_low_byte;
-static uint8_t calculated_crc_high_byte;
 static uint16_t payload_buffer_size;
 static char incoming_payload_no_command;
 
@@ -278,44 +276,35 @@ static void jump()
 #endif
 }
 
-
-
-static void makeCrc(uint8_t* pBuff, uint16_t length)
+/*
+  16 bit CRC
+ */
+uint16_t crc16(const uint8_t* pBuff, uint16_t length)
 {
-    static uint8_16_u CRC_16;
-    CRC_16.word=0;
+    uint16_t ret = 0;
 
-    for(int i = 0; i < length; i++) {
-
-
-	uint8_t xb = pBuff[i];
+    for (int i = 0; i < length; i++) {
+        uint8_t xb = pBuff[i];
 	for (uint8_t j = 0; j < 8; j++)
 	{
-	    if (((xb & 0x01) ^ (CRC_16.word & 0x0001)) !=0 ) {
-		CRC_16.word = CRC_16.word >> 1;
-		CRC_16.word = CRC_16.word ^ 0xA001;
-	    } else {
-		CRC_16.word = CRC_16.word >> 1;
-	    }
-	    xb = xb >> 1;
+            if (((xb & 0x01) ^ (ret & 0x0001)) != 0) {
+                ret >>= 1;
+                ret ^= 0xA001;
+            } else {
+                ret >>= 1;
+            }
+            xb = xb >> 1;
 	}
     }
-    calculated_crc_low_byte = CRC_16.bytes[0];
-    calculated_crc_high_byte = CRC_16.bytes[1];
+    return ret;
 }
 
-static char checkCrc(uint8_t* pBuff, uint16_t length)
+static bool checkCrc(uint8_t* pBuff, uint16_t length)
 {
+    const uint16_t crcin = pBuff[length] | (pBuff[length+1]<<8);
+    const uint16_t crc2 = crc16(pBuff, length);
 
-    char received_crc_low_byte2 = pBuff[length];          // one higher than len in buffer
-    char received_crc_high_byte2 = pBuff[length+1];
-    makeCrc(pBuff,length);
-
-    if((calculated_crc_low_byte==received_crc_low_byte2)   && (calculated_crc_high_byte==received_crc_high_byte2)){
-	return 1;
-    }else{
-	return 0;
-    }
+    return crcin == crc2;
 }
 
 
@@ -549,9 +538,9 @@ static void decodeInput()
         //    read_flash((uint8_t*)read_data , address);                 // make sure read_flash reads two less than buffer.
 	read_flash_bin((uint8_t*)read_data , address, out_buffer_size);
 
-        makeCrc(read_data,out_buffer_size);
-        read_data[out_buffer_size] = calculated_crc_low_byte;
-        read_data[out_buffer_size + 1] = calculated_crc_high_byte;
+        const uint16_t crc = crc16(read_data,out_buffer_size);
+        read_data[out_buffer_size] = crc&0xFF;
+        read_data[out_buffer_size + 1] = crc>>8;
         read_data[out_buffer_size + 2] = 0x30;
         sendString(read_data, out_buffer_size+3);
 
