@@ -71,6 +71,35 @@ static void can_printf(const char *fmt, ...);
 */
 static struct uavcan_protocol_NodeStatus node_status;
 
+enum boot_code {
+    CHECK_FW_OK = 0,
+    FAIL_REASON_NO_APP_SIG = 10,
+    FAIL_REASON_BAD_LENGTH_APP = 11,
+    FAIL_REASON_BAD_BOARD_ID = 12,
+    FAIL_REASON_BAD_CRC = 13,
+    FAIL_REASON_IN_UPDATE = 14,
+    FAIL_REASON_WATCHDOG = 15,
+    FAIL_REASON_BAD_LENGTH_DESCRIPTOR = 16,
+    FAIL_REASON_BAD_FIRMWARE_SIGNATURE = 17,
+    FAIL_REASON_VERIFICATION = 18,
+};
+
+#define APP_SIGNATURE_MAGIC1 0x68f058e6
+#define APP_SIGNATURE_MAGIC2 0xafcee5a0
+
+/*
+  application signature
+ */
+struct app_signature {
+    uint32_t magic1;
+    uint32_t magic2;
+    uint32_t fwlen; // total fw length in bytes
+    uint32_t crc1; // crc32 up to start of app_signature
+    uint32_t crc2; // crc32 from end of app_signature to end of fw
+    char mcu[16];
+    uint32_t unused[2];
+};
+
 /*
   simple 16 bit random number generator
 */
@@ -117,6 +146,22 @@ static const uint8_t default_settings[] = {
     0x20, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x02, 0x18, 0x64, 0x37, 0x0e, 0x00, 0x00, 0x05, 0x00,
     0x80, 0x80, 0x80, 0x32, 0x00, 0x32, 0x00, 0x00, 0x0f, 0x0a, 0x0a, 0x8d, 0x66, 0x06, 0x00, 0x00
 };
+
+// crc32 implementation, slow method for small flash cost
+static uint32_t crc32(const uint8_t *buf, uint32_t size)
+{
+    uint32_t crc = 0;
+    while (size--) {
+        const uint8_t byte = *buf++;
+        crc ^= byte;
+        for (uint8_t i=0; i<8; i++) {
+            const uint32_t mask = -(crc & 1);
+            crc >>= 1;
+            crc ^= (0xEDB88320 & mask);
+        }
+    }
+    return crc;
+}
 
 // printf to CAN LogMessage for debugging
 static void can_printf(const char *fmt, ...)
@@ -583,8 +628,6 @@ static void send_NodeStatus(void)
     node_status.mode = UAVCAN_PROTOCOL_NODESTATUS_MODE_MAINTENANCE;
     node_status.sub_mode = 0;
 
-    node_status.vendor_specific_status_code = 0;
-
     /*
       when doing a firmware update put the size in kbytes in VSSC so
       the user can see how far it has reached
@@ -719,6 +762,66 @@ bool DroneCAN_update()
     sys_can_enable_IRQ();
 
     return have_raw_command;
+}
+
+/*
+  implementation of memmem() for finding app signature
+ */
+static void *memmem(const void *haystack, size_t haystacklen, const void *needle, size_t needlelen)
+{
+    while (haystacklen >= needlelen) {
+        char *p = (char *)memchr(haystack, *(const char *)needle, haystacklen-(needlelen-1));
+        if (!p) return NULL;
+        if (memcmp(p, needle, needlelen) == 0) {
+            return p;
+        }
+        haystack = p+1;
+        haystacklen -= (p - (const char *)haystack) + 1;
+    }
+    return NULL;
+}
+
+/*
+  see if we are OK to boot
+ */
+bool DroneCAN_boot_ok(void)
+{
+    if ((get_rtc_backup_register(0) & 0xFFFFFFU) == RTC_BKUP0_FWUPDATE ||
+        fwupdate.node_id != 0) {
+        // waiting for firmware update
+        node_status.vendor_specific_status_code = FAIL_REASON_IN_UPDATE;
+        return false;
+    }
+    /*
+      check application signature
+     */
+    uint32_t sig[2] = { APP_SIGNATURE_MAGIC1, APP_SIGNATURE_MAGIC2 };
+    const uint32_t app_max_len = (128-18)*1024;
+    const uint8_t *fw_base = (const uint8_t *)MAIN_FW_START_ADDR;
+    struct app_signature *appsig = memmem(fw_base, app_max_len, sig, sizeof(sig));
+    if (appsig == NULL || (((uint32_t)appsig) & 3) != 0) {
+        node_status.vendor_specific_status_code = FAIL_REASON_NO_APP_SIG;
+        return false;
+    }
+    if (appsig->fwlen > app_max_len) {
+        node_status.vendor_specific_status_code = FAIL_REASON_BAD_LENGTH_APP;
+        return false;
+    }
+    if (memcmp(AM32_MCU, appsig->mcu, strlen(AM32_MCU)) != 0) {
+        node_status.vendor_specific_status_code = FAIL_REASON_BAD_BOARD_ID;
+        return false;
+    }
+    const uint8_t *appsigend = (const uint8_t *)(appsig+1);
+    const uint32_t crc1 = crc32(fw_base, (uint32_t)((uint8_t*)appsig - fw_base));
+    const uint32_t crc2 = crc32(appsigend, appsig->fwlen - (uint32_t)(appsigend - fw_base));
+    if (appsig->crc1 != crc1 ||
+        appsig->crc2 != crc2) {
+        node_status.vendor_specific_status_code = FAIL_REASON_BAD_CRC;
+        return false;
+    }
+
+    node_status.vendor_specific_status_code = CHECK_FW_OK;
+    return true;
 }
 
 #endif // DRONECAN_SUPPORT
