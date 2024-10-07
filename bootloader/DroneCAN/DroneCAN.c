@@ -60,8 +60,6 @@ static struct {
 
 static bool have_raw_command;
 
-static void can_printf(const char *fmt, ...);
-
 // some convenience macros
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
@@ -163,19 +161,15 @@ static uint32_t crc32(const uint8_t *buf, uint32_t size)
     return crc;
 }
 
-// printf to CAN LogMessage for debugging
-static void can_printf(const char *fmt, ...)
+// print to CAN LogMessage for debugging
+static void can_print(const char *s)
 {
-#if DRONECAN_DEBUG
     struct uavcan_protocol_debug_LogMessage pkt;
     memset(&pkt, 0, sizeof(pkt));
 
     uint8_t buffer[UAVCAN_PROTOCOL_DEBUG_LOGMESSAGE_MAX_SIZE];
-    va_list ap;
-    va_start(ap, fmt);
-    uint32_t n = vsnprintf((char*)pkt.text.data, sizeof(pkt.text.data), fmt, ap);
-    va_end(ap);
-    pkt.text.len = MIN(n, sizeof(pkt.text.data));
+    pkt.text.len = strlen(s);
+    memcpy(pkt.text.data, s, pkt.text.len);
 
     uint32_t len = uavcan_protocol_debug_LogMessage_encode(&pkt, buffer);
     static uint8_t logmsg_transfer_id;
@@ -186,7 +180,6 @@ static void can_printf(const char *fmt, ...)
 		    &logmsg_transfer_id,
 		    CANARD_TRANSFER_PRIORITY_LOW,
                     buffer, len);
-#endif
 }
 
 /*
@@ -204,7 +197,7 @@ static void handle_param_ExecuteOpcode(CanardInstance* ins, CanardRxTransfer* tr
     pkt.ok = false;
 
     if (req.opcode == UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_REQUEST_OPCODE_ERASE) {
-        can_printf("resetting to defaults");
+        can_print("resetting to defaults");
         save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);
         pkt.ok = true;
     }
@@ -319,7 +312,7 @@ static void handle_begin_firmware_update(CanardInstance* ins, CanardRxTransfer* 
                            &buffer[0],
                            total_size);
 
-    can_printf("Started firmware update\n");
+    can_print("Started firmware update");
 }
 
 /*
@@ -365,19 +358,23 @@ static void handle_file_read_response(CanardInstance* ins, CanardRxTransfer* tra
     if ((transfer->transfer_id+1)%32 != fwupdate.transfer_id ||
 	transfer->source_node_id != fwupdate.node_id) {
 	/* not for us */
-	can_printf("Firmware update: not for us id=%u/%u\n", (unsigned)transfer->transfer_id, (unsigned)fwupdate.transfer_id);
+        can_print("Firmware update: not for us");
 	return;
     }
     struct uavcan_protocol_file_ReadResponse pkt;
     if (uavcan_protocol_file_ReadResponse_decode(transfer, &pkt)) {
 	/* bad packet */
-	can_printf("Firmware update: bad packet\n");
+        can_print("Firmware update: bad packet");
 	return;
     }
     if (pkt.error.value != UAVCAN_PROTOCOL_FILE_ERROR_OK) {
+        if (fwupdate.offset == 0) {
+            // MissionPlanner does this sometimes, ignore
+            return;
+        }
 	/* read failed */
 	fwupdate.node_id = 0;
-	can_printf("Firmware update read failure\n");
+        can_print("Firmware update read failure");
 	return;
     }
 
@@ -389,7 +386,7 @@ static void handle_file_read_response(CanardInstance* ins, CanardRxTransfer* tra
 
     if (pkt.data.len < 256) {
 	/* firmware updare done */
-	can_printf("Firmwate update complete\n");
+        can_print("Firmwate update complete");
 	fwupdate.node_id = 0;
         set_rtc_backup_register(0, 0);
         NVIC_SystemReset();
@@ -696,11 +693,10 @@ void DroneCAN_processTxQueue(void)
     }
 }
 
+//#pragma GCC optimize("O0")
+
 static void DroneCAN_Startup(void)
 {
-    // initialise low level CAN peripheral hardware
-    sys_can_init();
-
     canardInit(&canard,
 	       canard_memory_pool,              // Raw memory chunk used for dynamic allocation
                sizeof(canard_memory_pool),
@@ -714,10 +710,32 @@ static void DroneCAN_Startup(void)
      */
     uint8_t node_id = 0;
     const uint32_t rtc0 = get_rtc_backup_register(0);
-    if ((rtc0 & 0xFFFFFFU) == RTC_BKUP0_FWUPDATE) {
+    if ((rtc0 & 0xFFFFU) == RTC_BKUP0_FWUPDATE) {
         node_id = rtc0 >> 24;
+        uint8_t src_node = (rtc0 >> 16) & 0xFF;
+        uint32_t path[2];
+        path[0] = get_rtc_backup_register(1);
+        path[1] = get_rtc_backup_register(2);
+        if (path[0] != 0 && src_node <= 127) {
+            // we have update path, can start immediately
+            fwupdate.node_id = src_node;
+            memset(fwupdate.path, 0, sizeof(fwupdate.path));
+            memcpy(fwupdate.path, path, sizeof(path));
+        }
     }
     canardSetLocalNodeID(&canard, node_id);
+
+    // initialise low level CAN peripheral hardware
+    sys_can_init();
+
+#if 0
+    if (fwupdate.node_id != 0) {
+        can_print("fwupdate startup");
+        can_print(fwupdate.path);
+    } else {
+        can_print("bootloader startup");
+    }
+#endif
 }
 
 /*
@@ -786,8 +804,11 @@ static void *memmem(const void *haystack, size_t haystacklen, const void *needle
  */
 bool DroneCAN_boot_ok(void)
 {
-    if ((get_rtc_backup_register(0) & 0xFFFFFFU) == RTC_BKUP0_FWUPDATE ||
-        fwupdate.node_id != 0) {
+    if (fwupdate.node_id != 0) {
+        // in fw update
+        return false;
+    }
+    if ((get_rtc_backup_register(0) & 0xFFFFU) == RTC_BKUP0_FWUPDATE) {
         // waiting for firmware update
         node_status.vendor_specific_status_code = FAIL_REASON_IN_UPDATE;
         return false;

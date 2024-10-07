@@ -110,9 +110,6 @@ void sys_can_init(void)
     can_filter_init_struct.filter_number = 1;
     can_filter_init(CAN1, &can_filter_init_struct);
 
-    /* can interrupt config */
-    sys_can_enable_IRQ();
-
     /* interrupt enable */
     can_interrupt_enable(CAN1, CAN_TCIEN_INT, TRUE);
     can_interrupt_enable(CAN1, CAN_RF0MIEN_INT, TRUE);
@@ -235,6 +232,16 @@ void CAN1_SE_IRQHandler(void)
         */
     }
   }
+}
+
+uint32_t get_rtc_backup_register(uint8_t idx)
+{
+    return ertc_bpr_data_read(idx);
+}
+
+void set_rtc_backup_register(uint8_t idx, uint32_t value)
+{
+    ertc_bpr_data_write(idx, value);
 }
 
 #endif // DRONECAN_SUPPORT && defined(ARTERY)
