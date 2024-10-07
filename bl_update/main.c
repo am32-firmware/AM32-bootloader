@@ -32,6 +32,8 @@ static uint32_t input_pin;
 #define str(x) xstr(x)
 #include str(bl_header)
 
+#define PORT_LETTER      0 // dummy
+
 #include <blutil.h>
 
 static void delayMicroseconds(uint32_t micros)
