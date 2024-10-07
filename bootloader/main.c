@@ -263,8 +263,7 @@ static void jump()
 #endif // DISABLE_APP_HEADER_CHECKS
 
 #if DRONECAN_SUPPORT
-    if ((get_rtc_backup_register(0) & 0xFFFFFFU) == RTC_BKUP0_FWUPDATE) {
-        // waiting for firmware update
+    if (!DroneCAN_boot_ok()) {
         invalid_command = 0;
         return;
     }
