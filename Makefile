@@ -88,6 +88,7 @@ SRC_BLU := $(foreach dir,bl_update,$(wildcard $(dir)/*.[cs]))
 LDSCRIPT_BL := bootloader/ldscript_bl.ld
 LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
 LDSCRIPT_BLU := bl_update/ldscript_bl.ld
+LDSCRIPT_BLU_CAN := bl_update/ldscript_bl_CAN.ld
 
 # Function to extract CFLAGS based on target name
 get_flash_size = $(if $(filter %K,$(word 2,$(subst _, ,$1))),-DBOARD_FLASH_SIZE=$(subst K,,$(word 2,$(subst _, ,$1))))
@@ -152,7 +153,7 @@ $(eval BLU_TARGET := $(call BOOTLOADER_UPDATE_BASENAME,$(BUILD),$(PIN)))
 $(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
 $(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
 $(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $$(if $$(call has_can_suffix,$$(BUILD)),$(LDSCRIPT_BL_CAN),$(LDSCRIPT_BL))))
-$(eval xBLU_LDSCRIPT := $(if $($(MCU)_LDSCRIPT_BLU), $($(MCU)_LDSCRIPT_BLU), $(LDSCRIPT_BLU)))
+$(eval xBLU_LDSCRIPT := $(if $($(MCU)_LDSCRIPT_BLU), $($(MCU)_LDSCRIPT_BLU), $$(if $$(call has_can_suffix,$$(BUILD)),$(LDSCRIPT_BLU_CAN),$(LDSCRIPT_BLU))))
 $(eval CFLAGS_DRONECAN := $$(if $$(call has_can_suffix,$$(1)),$$(CFLAGS_DRONECAN_L431)))
 $(eval SRC_DRONECAN := $(if $(call has_can_suffix,$(1)),$(SRC_DRONECAN_$(MCU))))
 
