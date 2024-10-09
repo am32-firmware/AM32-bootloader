@@ -20,7 +20,7 @@
 void usleep(uint32_t usec)
 {
     const uint16_t start_us = (uint16_t)bl_timer_us();
-    while (((uint16_t)bl_timer_us()) - start_us < (uint16_t)usec) ;
+    while ((uint16_t)(bl_timer_us() - start_us) < (uint16_t)usec) ;
 }
 
 /*
