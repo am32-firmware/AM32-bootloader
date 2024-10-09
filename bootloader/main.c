@@ -206,19 +206,19 @@ static void serialwriteChar(uint8_t data);
 #define HALFBITTIME      26 // 500000/BAUDRATE
 
 // used for timing bytes
-static uint32_t us_start;
+static uint16_t us_start;
 
 static void bl_timer_reset(void)
 {
     us_start = bl_timer_us();
 }
 
-static uint32_t bl_timer_elapsed(void)
+static uint16_t bl_timer_elapsed(void)
 {
     return bl_timer_us() - us_start;
 }
 
-static void delayMicroseconds(uint32_t micros)
+static void delayMicroseconds(uint16_t micros)
 {
     bl_timer_reset();
     while (bl_timer_elapsed() < micros) {

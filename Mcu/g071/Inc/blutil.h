@@ -92,7 +92,7 @@ static inline void bl_timer_disable(void)
     LL_TIM_DeInit(BL_TIMER);
 }
 
-static inline uint32_t bl_timer_us(void)
+static inline uint16_t bl_timer_us(void)
 {
     return LL_TIM_GetCounter(BL_TIMER);
 }

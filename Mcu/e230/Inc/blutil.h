@@ -70,7 +70,7 @@ static inline void bl_timer_disable(void)
     timer_disable(BL_TIMER);
 }
 
-static inline uint32_t bl_timer_us(void)
+static inline uint16_t bl_timer_us(void)
 {
     return timer_counter_read(BL_TIMER);
 }
