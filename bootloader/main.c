@@ -27,6 +27,9 @@
 // the string HELLO_WORLD is output every 10ms
 //#define BOOTLOADER_TEST_STRING
 
+// use this to check the backup domain registers work
+//#define BOOTLOADER_TEST_BKUP
+
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
 
@@ -59,7 +62,11 @@
 #endif
 
 #ifndef FIRMWARE_RELATIVE_START
+#if DRONECAN_SUPPORT
+#define FIRMWARE_RELATIVE_START 0x4000
+#else
 #define FIRMWARE_RELATIVE_START 0x1000
+#endif
 #endif
 
 #ifdef USE_PA2
@@ -95,31 +102,57 @@ static uint16_t invalid_command;
 
 #include <blutil.h>
 
+#if DRONECAN_SUPPORT
+#include "DroneCAN/DroneCAN.h"
+#include "DroneCAN/sys_can.h"
+#endif
+
 #ifndef BOARD_FLASH_SIZE
 #error "must define BOARD_FLASH_SIZE"
 #endif
+
+#define PIN_CODE (PORT_LETTER << 4 | PIN_NUMBER)
 
 /*
   currently only support 32, 64 or 128 k flash
  */
 #if BOARD_FLASH_SIZE == 32
 #define EEPROM_START_ADD (MCU_FLASH_START+0x7c00)
-static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x00,0x1f,0x06,0x06,0x01,0x30};
+#define FLASH_SIZE_CODE 0x1f
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 64
 #define EEPROM_START_ADD (MCU_FLASH_START+0xf800)
-static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x35,0x06,0x06,0x01,0x30};
+#define FLASH_SIZE_CODE 0x35
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 128
-static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x2B,0x06,0x06,0x01,0x30};
 #define EEPROM_START_ADD (MCU_FLASH_START+0x1f800)
+#define FLASH_SIZE_CODE 0x2B
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
-
 #else
 #error "unsupported BOARD_FLASH_SIZE"
 #endif
+
+/*
+  the devinfo structure tells the configuration client our pin code,
+  flash size and device type. It can also be used by the main firmware
+  to confirm we have the right eeprom address and pin code. We have 2
+  32bit magic values so the main firmware can confirm the bootloader
+  supports this feature
+ */
+#define DEVINFO_MAGIC1 0x5925e3da
+#define DEVINFO_MAGIC2 0x4eb863d9
+
+static const struct {
+    uint32_t magic1;
+    uint32_t magic2;
+    const uint8_t deviceInfo[9];
+} devinfo __attribute__((section(".devinfo"))) = {
+        .magic1 = DEVINFO_MAGIC1,
+        .magic2 = DEVINFO_MAGIC2,
+        .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,0x01,0x30}
+};
 
 typedef void (*pFunction)(void);
 
@@ -149,11 +182,6 @@ static int cmd;
 static char eeprom_req;
 static int received;
 
-
-static uint8_t pin_code = PORT_LETTER << 4 | PIN_NUMBER;
-
-
-
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static char rxbyte;
@@ -165,13 +193,11 @@ typedef union __attribute__ ((packed)) {
 } uint8_16_u;
 
 static uint16_t len;
-static uint8_t calculated_crc_low_byte;
-static uint8_t calculated_crc_high_byte;
 static uint16_t payload_buffer_size;
 static char incoming_payload_no_command;
 
 /* USER CODE BEGIN PFP */
-static void sendString(uint8_t data[], int len);
+static void sendString(const uint8_t data[], int len);
 static void receiveBuffer();
 static void serialwriteChar(uint8_t data);
 
@@ -179,10 +205,23 @@ static void serialwriteChar(uint8_t data);
 #define BITTIME          52 // 1000000/BAUDRATE
 #define HALFBITTIME      26 // 500000/BAUDRATE
 
-static void delayMicroseconds(uint32_t micros)
+// used for timing bytes
+static uint16_t us_start;
+
+static void bl_timer_reset(void)
+{
+    us_start = bl_timer_us();
+}
+
+static uint16_t bl_timer_elapsed(void)
+{
+    return bl_timer_us() - us_start;
+}
+
+static void delayMicroseconds(uint16_t micros)
 {
     bl_timer_reset();
-    while (bl_timer_us() < micros) {
+    while (bl_timer_elapsed() < micros) {
     }
 }
 
@@ -222,48 +261,49 @@ static void jump()
 	return;
     }
 #endif // DISABLE_APP_HEADER_CHECKS
+
+#if DRONECAN_SUPPORT
+    if (!DroneCAN_boot_ok()) {
+        invalid_command = 0;
+        return;
+    }
+
+    sys_can_disable_IRQ();
+#endif
+
     jump_to_application();
 #endif
 }
 
-
-
-static void makeCrc(uint8_t* pBuff, uint16_t length)
+/*
+  16 bit CRC
+ */
+uint16_t crc16(const uint8_t* pBuff, uint16_t length)
 {
-    static uint8_16_u CRC_16;
-    CRC_16.word=0;
+    uint16_t ret = 0;
 
-    for(int i = 0; i < length; i++) {
-
-
-	uint8_t xb = pBuff[i];
+    for (int i = 0; i < length; i++) {
+        uint8_t xb = pBuff[i];
 	for (uint8_t j = 0; j < 8; j++)
 	{
-	    if (((xb & 0x01) ^ (CRC_16.word & 0x0001)) !=0 ) {
-		CRC_16.word = CRC_16.word >> 1;
-		CRC_16.word = CRC_16.word ^ 0xA001;
-	    } else {
-		CRC_16.word = CRC_16.word >> 1;
-	    }
-	    xb = xb >> 1;
+            if (((xb & 0x01) ^ (ret & 0x0001)) != 0) {
+                ret >>= 1;
+                ret ^= 0xA001;
+            } else {
+                ret >>= 1;
+            }
+            xb = xb >> 1;
 	}
     }
-    calculated_crc_low_byte = CRC_16.bytes[0];
-    calculated_crc_high_byte = CRC_16.bytes[1];
+    return ret;
 }
 
-static char checkCrc(uint8_t* pBuff, uint16_t length)
+static bool checkCrc(uint8_t* pBuff, uint16_t length)
 {
+    const uint16_t crcin = pBuff[length] | (pBuff[length+1]<<8);
+    const uint16_t crc2 = crc16(pBuff, length);
 
-    char received_crc_low_byte2 = pBuff[length];          // one higher than len in buffer
-    char received_crc_high_byte2 = pBuff[length+1];
-    makeCrc(pBuff,length);
-
-    if((calculated_crc_low_byte==received_crc_low_byte2)   && (calculated_crc_high_byte==received_crc_high_byte2)){
-	return 1;
-    }else{
-	return 0;
-    }
+    return crcin == crc2;
 }
 
 
@@ -308,7 +348,7 @@ static void send_BAD_CRC_ACK()
 static void sendDeviceInfo()
 {
     setTransmit();
-    sendString(deviceInfo,9);
+    sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
     setReceive();
 }
 
@@ -497,9 +537,9 @@ static void decodeInput()
         //    read_flash((uint8_t*)read_data , address);                 // make sure read_flash reads two less than buffer.
 	read_flash_bin((uint8_t*)read_data , address, out_buffer_size);
 
-        makeCrc(read_data,out_buffer_size);
-        read_data[out_buffer_size] = calculated_crc_low_byte;
-        read_data[out_buffer_size + 1] = calculated_crc_high_byte;
+        const uint16_t crc = crc16(read_data,out_buffer_size);
+        read_data[out_buffer_size] = crc&0xFF;
+        read_data[out_buffer_size + 1] = crc>>8;
         read_data[out_buffer_size + 2] = 0x30;
         sendString(read_data, out_buffer_size+3);
 
@@ -538,7 +578,7 @@ static bool serialreadChar()
 
     // UART is idle high, wait for it to be in the idle state
     while (!gpio_read(input_pin)) { // wait for rx to go high
-	if (bl_timer_us() > 20000) {
+        if (bl_timer_elapsed() > 20000U) {
 	    /*
 	      if we don't get a command for 20ms then assume we should
 	      be trying to boot the main firmware, invalid_command 101
@@ -555,14 +595,21 @@ static bool serialreadChar()
     // now we need to wait for the start bit leading edge, which is low
     bl_timer_reset();
     while (gpio_read(input_pin)) {
-	if (bl_timer_us() > 20*BITTIME && messagereceived) {
-	    // we've been waiting too long, don't allow for long gaps
-	    // between bytes
-#ifdef SERIAL_STATS
-	    stats.no_start++;
+        if (bl_timer_elapsed() > 20*BITTIME) {
+#if DRONECAN_SUPPORT
+            if (DroneCAN_update()) {
+                jump();
+            }
 #endif
-	    return false;
-	}
+            if (messagereceived) {
+                // we've been waiting too long, don't allow for long gaps
+                // between bytes
+#ifdef SERIAL_STATS
+                stats.no_start++;
+#endif
+                return false;
+            }
+        }
     }
 
     // wait to get the center of bit time. We want to sample at the
@@ -639,7 +686,7 @@ static void serialwriteChar(uint8_t data)
 }
 
 
-static void sendString(uint8_t *data, int len)
+static void sendString(const uint8_t *data, int len)
 {
     for(int i = 0; i < len; i++){
         serialwriteChar(data[i]);
@@ -668,7 +715,7 @@ static void receiveBuffer()
 	    rxBuffer[i] = rxbyte;
 	    count++;
 	} else {
-	    if(bl_timer_us() > 250){
+            if(bl_timer_elapsed() > 250){
 	
 		count = 0;
 
@@ -710,8 +757,7 @@ static void checkForSignal()
     for(int i = 0 ; i < 500; i ++){
 	if(!gpio_read(input_pin)){
 	    low_pin_count++;
-	}else{
-	}
+        }
 
 	delayMicroseconds(10);
     }
@@ -754,9 +800,6 @@ static void checkForSignal()
 
 	delayMicroseconds(10);
     }
-    if (low_pin_count == 0) {
-	return;            // when floated all
-    }
 
     if (low_pin_count > 0) {
 	jump();
@@ -772,11 +815,11 @@ static void test_clock(void)
     setTransmit();
     while (1) {
 	gpio_clear(input_pin);
-	bl_timer_reset();
-	while (bl_timer_us() < 2000) ;
+        bl_timer_reset();
+        while (bl_timer_elapsed() < 2000) ;
 	gpio_set(input_pin);
-	bl_timer_reset();
-	while (bl_timer_us() < 1000) ;
+        bl_timer_reset();
+        while (bl_timer_elapsed() < 1000) ;
     }
 }
 #endif // BOOTLOADER_TEST_CLOCK
@@ -795,6 +838,24 @@ static void test_string(void)
 }
 #endif // BOOTLOADER_TEST_STRING
 
+
+#ifdef BOOTLOADER_TEST_BKUP
+/*
+  test operation of backup domain registers
+ */
+volatile uint32_t bkup_value;
+static void test_rtc_backup(void)
+{
+    uint32_t v = 0;
+    while (true) {
+        bkup_value++;
+        set_rtc_backup_register(0, bkup_value);
+        bkup_value = get_rtc_backup_register(0);
+        delayMicroseconds(1000);
+    }
+}
+#endif
+
 int main(void)
 {
     bl_clock_config();
@@ -807,6 +868,9 @@ int main(void)
 #ifdef BOOTLOADER_TEST_STRING
     test_string();
 #endif
+#ifdef BOOTLOADER_TEST_BKUP
+    test_rtc_backup();
+#endif
 
     checkForSignal();
 
@@ -816,8 +880,6 @@ int main(void)
     jump();
 #endif
 
-    deviceInfo[3] = pin_code;
-
 #ifdef UPDATE_EEPROM_ENABLE
      update_EEPROM();
 #endif
@@ -826,6 +888,11 @@ int main(void)
 	  receiveBuffer();
 	  if (invalid_command > 100) {
 	      jump();
-	  }
+          }
+#if DRONECAN_SUPPORT
+          if (DroneCAN_update()) {
+              jump();
+          }
+#endif
     }
 }

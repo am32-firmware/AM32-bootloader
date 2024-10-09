@@ -116,14 +116,9 @@ static inline void bl_timer_disable(void)
     RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, DISABLE);
 }
 
-static inline uint32_t bl_timer_us(void)
+static inline uint16_t bl_timer_us(void)
 {
     return BL_TIMER->CNT;
-}
-
-static inline void bl_timer_reset(void)
-{
-    BL_TIMER->CNT = 0;
 }
 
 /*

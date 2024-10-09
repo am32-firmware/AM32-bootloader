@@ -24,6 +24,7 @@
 
 #define GPIO_OUTPUT_PUSH_PULL LL_GPIO_OUTPUT_PUSHPULL
 
+#ifdef PORT_LETTER
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
     LL_GPIO_SetPinMode(input_port, pin, LL_GPIO_MODE_INPUT);
@@ -50,6 +51,7 @@ static inline bool gpio_read(uint32_t pin)
 {
     return LL_GPIO_IsInputPinSet(input_port, pin);
 }
+#endif // PORT_LETTER
 
 #define BL_TIMER TIM2
 
@@ -85,14 +87,9 @@ static inline void bl_timer_disable(void)
     LL_TIM_DeInit(BL_TIMER);
 }
 
-static inline uint32_t bl_timer_us(void)
+static inline uint16_t bl_timer_us(void)
 {
     return LL_TIM_GetCounter(BL_TIMER);
-}
-
-static inline void bl_timer_reset(void)
-{
-    LL_TIM_SetCounter(BL_TIMER, 0);
 }
 
 /*
@@ -103,12 +100,18 @@ static inline void bl_clock_config(void)
     LL_FLASH_SetLatency(LL_FLASH_LATENCY_4);
     while (LL_FLASH_GetLatency()!= LL_FLASH_LATENCY_4) ;
     LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
+
     while (LL_PWR_IsActiveFlag_VOS() != 0) ;
     LL_RCC_MSI_Enable();
+    LL_RCC_LSI_Enable();
 
-    /* Wait till MSI is ready */
+    /* Wait till MSI and LSI are ready */
+    while (LL_RCC_LSI_IsReady() != 1) ;
     while (LL_RCC_MSI_IsReady() != 1) ;
 
+    LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSI);
+    LL_RCC_EnableRTC();
+    
     LL_RCC_MSI_EnableRangeSelection();
     LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_6);
     LL_RCC_MSI_SetCalibTrimming(0);
@@ -128,6 +131,7 @@ static inline void bl_clock_config(void)
     LL_RCC_SetAPB2Prescaler(LL_RCC_APB2_DIV_1);
 }
 
+#ifdef PORT_LETTER
 static inline void bl_gpio_init(void)
 {
     LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
@@ -203,4 +207,9 @@ void SystemInit(void)
 
   /* Disable all interrupts */
   RCC->CIER = 0x00000000U;
+
+  // enable the backup domain
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+  LL_PWR_EnableBkUpAccess();
 }
+#endif // PORT_LETTER
