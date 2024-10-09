@@ -14,6 +14,7 @@
 #include "sys_can.h"
 #include <canard.h>
 #include <blutil.h>
+#include <DroneCAN.h>
 
 // include the headers for the generated DroneCAN messages from the
 // dronecan_dsdlc compiler
@@ -80,6 +81,7 @@ enum boot_code {
     FAIL_REASON_BAD_LENGTH_DESCRIPTOR = 16,
     FAIL_REASON_BAD_FIRMWARE_SIGNATURE = 17,
     FAIL_REASON_VERIFICATION = 18,
+    FAIL_REASON_NO_SIGNAL = 19,
 };
 
 #define APP_SIGNATURE_MAGIC1 0x68f058e6
@@ -779,7 +781,7 @@ bool DroneCAN_update()
 
     sys_can_enable_IRQ();
 
-    return have_raw_command;
+    return DroneCAN_boot_ok();
 }
 
 /*
@@ -841,7 +843,13 @@ bool DroneCAN_boot_ok(void)
         return false;
     }
 
+    if (!have_raw_command) {
+        node_status.vendor_specific_status_code = FAIL_REASON_NO_SIGNAL;
+        return false;
+    }
+
     node_status.vendor_specific_status_code = CHECK_FW_OK;
+
     return true;
 }
 
