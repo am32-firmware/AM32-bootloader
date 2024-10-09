@@ -801,6 +801,17 @@ static void *memmem(const void *haystack, size_t haystacklen, const void *needle
     return NULL;
 }
 
+static void set_reason(enum boot_code code, const char *reason)
+{
+    static uint64_t last_msg_us;
+    node_status.vendor_specific_status_code = code;
+    const uint64_t now_us = micros64();
+    if (now_us - last_msg_us > 5000000UL) {
+        last_msg_us = now_us;
+        can_print(reason);
+    }
+}
+
 /*
   see if we are OK to boot
  */
@@ -823,15 +834,15 @@ bool DroneCAN_boot_ok(void)
     const uint8_t *fw_base = (const uint8_t *)MAIN_FW_START_ADDR;
     struct app_signature *appsig = memmem(fw_base, app_max_len, sig, sizeof(sig));
     if (appsig == NULL || (((uint32_t)appsig) & 3) != 0) {
-        node_status.vendor_specific_status_code = FAIL_REASON_NO_APP_SIG;
+        set_reason(FAIL_REASON_NO_APP_SIG, "no app signature");
         return false;
     }
     if (appsig->fwlen > app_max_len) {
-        node_status.vendor_specific_status_code = FAIL_REASON_BAD_LENGTH_APP;
+        set_reason(FAIL_REASON_BAD_LENGTH_APP, "bad app length");
         return false;
     }
     if (memcmp(AM32_MCU, appsig->mcu, strlen(AM32_MCU)) != 0) {
-        node_status.vendor_specific_status_code = FAIL_REASON_BAD_BOARD_ID;
+        set_reason(FAIL_REASON_BAD_BOARD_ID, "bad board type");
         return false;
     }
     const uint8_t *appsigend = (const uint8_t *)(appsig+1);
@@ -839,12 +850,12 @@ bool DroneCAN_boot_ok(void)
     const uint32_t crc2 = crc32(appsigend, appsig->fwlen - (uint32_t)(appsigend - fw_base));
     if (appsig->crc1 != crc1 ||
         appsig->crc2 != crc2) {
-        node_status.vendor_specific_status_code = FAIL_REASON_BAD_CRC;
+        set_reason(FAIL_REASON_BAD_CRC, "bad firmware CRC");
         return false;
     }
 
     if (!have_raw_command) {
-        node_status.vendor_specific_status_code = FAIL_REASON_NO_SIGNAL;
+        set_reason(FAIL_REASON_BAD_CRC, "no signal");
         return false;
     }
 
