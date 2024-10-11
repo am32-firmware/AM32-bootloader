@@ -555,7 +555,7 @@ static bool serialreadChar()
     // now we need to wait for the start bit leading edge, which is low
     bl_timer_reset();
     while (gpio_read(input_pin)) {
-	if (bl_timer_us() > 20*BITTIME && messagereceived) {
+	if (bl_timer_us() > 5*BITTIME && messagereceived) {
 	    // we've been waiting too long, don't allow for long gaps
 	    // between bytes
 #ifdef SERIAL_STATS
