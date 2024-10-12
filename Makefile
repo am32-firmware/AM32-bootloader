@@ -20,7 +20,7 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203
+MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K H563 L431 L431_128K G431 V203
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0
