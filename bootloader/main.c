@@ -21,11 +21,11 @@
 
 // use this to check the clock config for the MCU (with a logic
 // analyser on the input pin)
-//#define BOOTLOADER_TEST_CLOCK
+#define BOOTLOADER_TEST_CLOCK
 
 // use this to check the string output code. When enabled
 // the string HELLO_WORLD is output every 10ms
-//#define BOOTLOADER_TEST_STRING
+// #define BOOTLOADER_TEST_STRING
 
 // when there is no app fw yet, disable jump()
 #define DISABLE_JUMP
@@ -811,7 +811,7 @@ static void test_string(void)
 
 int main(void)
 {
-    bl_clock_config();
+    // bl_clock_config();
     bl_timer_init();
     bl_gpio_init();
 
