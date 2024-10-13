@@ -28,7 +28,7 @@
 //#define BOOTLOADER_TEST_STRING
 
 // when there is no app fw yet, disable jump()
-//#define DISABLE_JUMP
+#define DISABLE_JUMP
 
 // optionally enable stats on serial bit-banging
 //#define SERIAL_STATS
@@ -82,6 +82,11 @@
 #define input_port        GPIOA
 #define PIN_NUMBER        6
 #define PORT_LETTER       0
+#elif defined(USE_PA5)
+#define input_pin         GPIO_PIN(5)
+#define input_port        GPIOA
+#define PIN_NUMBER        5
+#define PORT_LETTER       0
 #elif defined(USE_PA0)
 #define input_pin         GPIO_PIN(0)
 #define input_port        GPIOA
@@ -116,6 +121,15 @@ static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x35,0x06,0x06,0x01,0x30};
 static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x2B,0x06,0x06,0x01,0x30};
 #define EEPROM_START_ADD (MCU_FLASH_START+0x1f800)
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
+
+#elif BOARD_FLASH_SIZE == 1024
+#define EEPROM_PAGE_SIZE (0x1800)
+#define EEPROM_BASE (0x09000000)
+#define EEPROM_PAGE (7)
+// eeprom address is 0x900a800 with one EDATA high cycle (6kB) page enabled
+#define EEPROM_START_ADD (EEPROM_BASE + EEPROM_PAGE*EEPROM_PAGE_SIZE)
+static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x35,0x06,0x06,0x01,0x30};
+#define ADDRESS_SHIFT 0
 
 #else
 #error "unsupported BOARD_FLASH_SIZE"
@@ -193,7 +207,7 @@ static void jump()
 {
 #ifndef DISABLE_JUMP
 #if CHECK_EEPROM_BEFORE_JUMP
-    uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
+    uint16_t value = *(uint16_t*)(EEPROM_START_ADD);
     if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
 	invalid_command = 0;
 	return;

@@ -25,6 +25,15 @@
 uint32_t FLASH_FKEY1 = 0x45670123;
 uint32_t FLASH_FKEY2 = 0xCDEF89AB;
 
+bool memcmp16(uint16_t* d1, uint16_t* d2, int length) {
+    for (int i = 0; i < length; i++) {
+        if (d1[i] != d2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 {
     // ensure address alignment to 16 bit boundaries
@@ -59,8 +68,9 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
         index++;
     }
     // ensure data is correct
-    return memcmp(data, (const void *)add, length) == 0;
+    return memcmp16(data_to_FLASH, (uint16_t*)add, length) == 0;
 }
+
 
 void read_flash_bin(uint8_t* data, uint32_t add, int out_buff_len)
 {

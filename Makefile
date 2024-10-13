@@ -23,7 +23,7 @@ include $(ROOT)/make/tools.mk
 MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K H563 L431 L431_128K G431 V203
 
 # we support bootloader comms on a list of possible pins
-BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0
+BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 PA5
 
 # filter out any unsupported MCUs for this host OS
 filter_mcus = $(foreach w,$(MCU_NOBUILD),$(eval MCU_BUILDS := $(filter-out $w,$(MCU_BUILDS))))$(MCU_BUILDS)
@@ -46,8 +46,10 @@ $(call INCLUDE_MCU_MAKEFILES)
 LIBS := -lnosys
 
 # Compiler options
-CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math --specs=nosys.specs
-CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -ffunction-sections -funsigned-char
+# CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math --specs=nosys.specs
+# CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -ffunction-sections -funsigned-char
+CFLAGS_BASE := -fsingle-precision-constant --specs=nosys.specs
+CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -ffunction-sections -funsigned-char
 CFLAGS_BASE += -Wall -Wextra -Wundef -Werror -Wno-unused-parameter
 
 CFLAGS_COMMON := $(CFLAGS_BASE)

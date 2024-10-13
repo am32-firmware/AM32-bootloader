@@ -12,28 +12,33 @@
         "liveWatch": {
             "enabled": true,
             "samplesPerSecond": 4,
-	},
-	"svdFile": "obj/debug.svd",
+	      },
+
+  
+        "svdFile": "obj/debug.svd",
         "request": "launch",
         "type": "cortex-debug",
         "servertype": "openocd",
-	      "configFiles": [
-	    "${workspaceFolder}/obj/openocd.cfg",
+        "configFiles": [
+	        // "${workspaceFolder}/obj/openocd.cfg",
+          "board/st_nucleo_h5.cfg"
+
         ],
 	      "showDevDebugOutput": "none",
         "osx": {
-            "serverpath": "${workspaceFolder}/tools/macos/openocd/bin/openocd",
+            // "serverpath": "${workspaceFolder}/tools/macos/openocd/bin/openocd",
             "armToolchainPath": "${workspaceFolder}/tools/macos/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin"
         },
         "linux": {
-            "serverpath": "${workspaceFolder}/tools/linux/openocd/bin/openocd",
+            // "serverpath": "${workspaceFolder}/tools/linux/openocd/bin/openocd",
             "armToolchainPath": "${workspaceFolder}/tools/linux/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin"
         },
         "windows": {
-            "serverpath": "${workspaceFolder}\\tools\\windows\\openocd\\bin\\openocd",
+            // "serverpath": "${workspaceFolder}\\tools\\windows\\openocd\\bin\\openocd",
             "armToolchainPath": "${workspaceFolder}\\tools\\windows\\xpack-arm-none-eabi-gcc-10.3.1-2.3\\bin"
         }
       },
+
 
       // JLink configuration
       {

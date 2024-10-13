@@ -15,7 +15,7 @@
 /*
   use 32k of flash
  */
-#define BOARD_FLASH_SIZE 32
+#define BOARD_FLASH_SIZE 1024
 
 #define GPIO_PIN(n) (1U<<(n))
 
@@ -24,8 +24,6 @@
 #define GPIO_PULL_DOWN LL_GPIO_PULL_DOWN
 
 #define GPIO_OUTPUT_PUSH_PULL LL_GPIO_OUTPUT_PUSHPULL
-
-uint32_t SystemCoreClock = 8000000U;
 
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
@@ -61,23 +59,10 @@ static inline bool gpio_read(uint32_t pin)
  */
 static inline void bl_timer_init(void)
 {
-    LL_TIM_InitTypeDef TIM_InitStruct = {0};
-
     /* Peripheral clock enable */
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
-
-    TIM_InitStruct.Prescaler = 47;
-    TIM_InitStruct.CounterMode = LL_TIM_COUNTERMODE_UP;
-    TIM_InitStruct.Autoreload = 0xFFFFFFFF;
-    TIM_InitStruct.ClockDivision = LL_TIM_CLOCKDIVISION_DIV1;
-    LL_TIM_Init(BL_TIMER, &TIM_InitStruct);
-    LL_TIM_DisableARRPreload(BL_TIMER);
-    LL_TIM_SetClockSource(BL_TIMER, LL_TIM_CLOCKSOURCE_INTERNAL);
-    LL_TIM_SetTriggerOutput(BL_TIMER, LL_TIM_TRGO_RESET);
-    LL_TIM_DisableMasterSlaveMode(BL_TIMER);
-
-    LL_TIM_SetCounterMode(BL_TIMER, LL_TIM_COUNTERMODE_UP);
-    LL_TIM_EnableCounter(BL_TIMER);
+    TIM2->PSC = 63;
+    TIM2->CR1 |= TIM_CR1_CEN;
 }
 
 /*
@@ -90,12 +75,12 @@ static inline void bl_timer_disable(void)
 
 static inline uint32_t bl_timer_us(void)
 {
-    return LL_TIM_GetCounter(BL_TIMER);
+    return TIM2->CNT;
 }
 
 static inline void bl_timer_reset(void)
 {
-    LL_TIM_SetCounter(BL_TIMER, 0);
+    TIM2->CNT = 0;
 }
 
 /*
