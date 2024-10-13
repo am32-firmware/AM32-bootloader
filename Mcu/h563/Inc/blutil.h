@@ -90,7 +90,13 @@ static inline void bl_timer_reset(void)
  */
 static inline void bl_clock_config(void)
 {
-    // FLASH->ACR |= FLASH_ACR_PRFTBE;   // prefetch buffer enable
+    // enable prefetch buffer
+    FLASH->ACR |= FLASH_ACR_PRFTEN;
+
+    // wait for any ongoing cache invalidation
+    while (ICACHE->CR & ICACHE_SR_BUSYF);
+    // enable icache miss monitor, hit monitor, and icache itself
+    ICACHE->CR |= ICACHE_CR_MISSMEN | ICACHE_CR_HITMEN | ICACHE_CR_EN;
 
     // LL_FLASH_SetLatency(LL_FLASH_LATENCY_1);
 
