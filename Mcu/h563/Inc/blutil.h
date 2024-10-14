@@ -61,6 +61,7 @@ static inline void bl_timer_init(void)
 {
     /* Peripheral clock enable */
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
+    // TIM2->PSC = 63;
     TIM2->PSC = 31;
     TIM2->CR1 |= TIM_CR1_CEN;
     TIM2->EGR |= TIM_EGR_UG;
