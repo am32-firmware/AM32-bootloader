@@ -82,7 +82,8 @@ void read_flash_bin(uint8_t* data, uint32_t add, int out_buff_len)
     uint16_t* readData = (uint16_t*)data;
     // volatile uint32_t read_data;
     for (int i = 0; i < length; i++) {
-        readData[i] = *(uint16_t*)(add + i*2);
+        uint32_t eeprom_add = add + i*2;
+        readData[i] = *(uint16_t*)(eeprom_add);
         // readData[i] = *(uint32_t*)(add + i);
     }
 }

@@ -114,10 +114,10 @@ static inline void bl_clock_config(void)
     //     // wait for hsi to switch over
     // }
 
-    // enable prefetch buffer
-    FLASH->ACR |= FLASH_ACR_PRFTEN;
+    // // enable prefetch buffer
+    // FLASH->ACR |= FLASH_ACR_PRFTEN;
 
-    mpu_config();
+    // mpu_config();
 
     // // wait for any ongoing cache invalidation
     // while (ICACHE->CR & ICACHE_SR_BUSYF);
