@@ -74,12 +74,10 @@ void read_flash_bin(uint8_t* data, uint32_t add, int out_buff_len)
     // uint32_t readData[10];
     int length = out_buff_len / 2;
     // uint16_t readData[length];
-    __DMB();
-    volatile uint16_t* addr = (uint16_t*)add;
-    volatile uint16_t* readData = (uint16_t*)data;
+    uint16_t* readData = (uint16_t*)data;
     // volatile uint32_t read_data;
     for (int i = 0; i < length; i++) {
-        readData[i] = addr[i];
+        readData[i] = *(uint16_t*)(add + i*2);
         // readData[i] = *(uint32_t*)(add + i);
     }
 }
