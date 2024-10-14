@@ -832,6 +832,10 @@ int main(void)
 
     deviceInfo[3] = pin_code;
 
+	volatile uint16_t x = *(uint16_t*)(EEPROM_START_ADD + 4);
+	// read_flash_bin(rxBuffer , EEPROM_START_ADD , 48);
+	(void) x;
+	while (1);
 #ifdef UPDATE_EEPROM_ENABLE
      update_EEPROM();
 #endif

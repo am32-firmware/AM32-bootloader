@@ -62,7 +62,6 @@ static inline void bl_timer_init(void)
     /* Peripheral clock enable */
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
     TIM2->PSC = 63;
-    // TIM2->PSC = 31;
     TIM2->CR1 |= TIM_CR1_CEN;
     TIM2->EGR |= TIM_EGR_UG;
 
@@ -95,17 +94,24 @@ static inline void bl_mpu_config(void)
         LL_MPU_REGION_NUMBER0,
         LL_MPU_REGION_ALL_RW,
         LL_MPU_ATTRIBUTES_NUMBER0,
-        // 0x0900a800,
-        // 0x0900c000
-        EEPROM_BASE,
-        EEPROM_BASE + EEPROM_PAGE_SIZE
+        0x0900a800,
+        0x0900c000
+        // EEPROM_BASE,
+        // EEPROM_BASE + EEPROM_PAGE_SIZE
     );
     LL_MPU_Enable(LL_MPU_CTRL_PRIVILEGED_DEFAULT);
 }
 
 static inline void bl_hsi_config(void)
 {
-
+    // at startup, system clock is HSI = 64MHz / 2 = 32MHz
+    // the HSI divider at startup is 2
+    // here we switch it to 1 so that the system clock is 64MHz
+    RCC->CR &= ~(RCC_CR_HSIDIV_Msk);
+    while (!(RCC->CR & RCC_CR_HSIDIVF))
+    {
+        // wait for hsi to switch over
+    }
 }
 
 static inline void bl_flash_enable_prefetch(void)
@@ -113,47 +119,21 @@ static inline void bl_flash_enable_prefetch(void)
     // enable prefetch buffer
     FLASH->ACR |= FLASH_ACR_PRFTEN;
 }
+static inline void bl_icache_config(void)
+{
+    // // wait for any ongoing cache invalidation
+    while (ICACHE->CR & ICACHE_SR_BUSYF);
+    // enable icache miss monitor, hit monitor, and icache itself
+    ICACHE->CR |= ICACHE_CR_MISSMEN | ICACHE_CR_HITMEN | ICACHE_CR_EN;
 
+}
 
 static inline void bl_clock_config(void)
 {
     bl_flash_enable_prefetch(); 
-    mpu_config();
-
-    // // wait for any ongoing cache invalidation
-    // while (ICACHE->CR & ICACHE_SR_BUSYF);
-    // // enable icache miss monitor, hit monitor, and icache itself
-    // ICACHE->CR |= ICACHE_CR_MISSMEN | ICACHE_CR_HITMEN | ICACHE_CR_EN;
-
-    // LL_FLASH_SetLatency(LL_FLASH_LATENCY_1);
-
-    // LL_RCC_HSI_Enable();
-
-    // /* Wait till HSI is ready */
-    // while (LL_RCC_HSI_IsReady() != 1) ;
-    // LL_RCC_HSI_SetCalibTrimming(16);
-    // LL_RCC_HSI14_Enable();
-
-    // /* Wait till HSI14 is ready */
-    // while (LL_RCC_HSI14_IsReady() != 1) ;
-    // LL_RCC_HSI14_SetCalibTrimming(16);
-    // LL_RCC_LSI_Enable();
-
-    // /* Wait till LSI is ready */
-    // while (LL_RCC_LSI_IsReady() != 1) ;
-    // LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSI_DIV_2, LL_RCC_PLL_MUL_12);
-    // LL_RCC_PLL_Enable();
-
-    // /* Wait till PLL is ready */
-    // while (LL_RCC_PLL_IsReady() != 1) ;
-    // LL_RCC_SetAHBPrescaler(LL_RCC_SYSCLK_DIV_1);
-    // LL_RCC_SetAPB1Prescaler(LL_RCC_APB1_DIV_1);
-    // LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_PLL);
-
-    // /* Wait till System clock is ready */
-    // while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_PLL) ;
-    // LL_Init1msTick(48000000);
-    // LL_SetSystemCoreClock(48000000);
+    bl_hsi_config();
+    // bl_mpu_config();
+    // bl_icache_config();
 }
 
 static inline void bl_gpio_init(void)
