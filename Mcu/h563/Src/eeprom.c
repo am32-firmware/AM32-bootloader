@@ -1,11 +1,6 @@
-/*
- * bootloader.c
- *
- *  Created on: Mar. 25, 2020
- *      Author: Alka
- *
- */
-
+// 0x08fe000 (0x08000000 + 0x2000*127) // can't read
+// 0x08fc000 (0x08000000 + 0x2000*126) // can't read
+// 0x08fa000 (0x08000000 + 0x2000*125) // CAN read
 #include "eeprom.h"
 
 #include <string.h>
@@ -79,11 +74,12 @@ void read_flash_bin(uint8_t* data, uint32_t add, int out_buff_len)
     // uint32_t readData[10];
     int length = out_buff_len / 2;
     // uint16_t readData[length];
-    uint16_t* readData = (uint16_t*)data;
+    __DMB();
+    volatile uint16_t* addr = (uint16_t*)add;
+    volatile uint16_t* readData = (uint16_t*)data;
     // volatile uint32_t read_data;
     for (int i = 0; i < length; i++) {
-        uint32_t eeprom_add = add + i*2;
-        readData[i] = *(uint16_t*)(eeprom_add);
+        readData[i] = addr[i];
         // readData[i] = *(uint32_t*)(add + i);
     }
 }
