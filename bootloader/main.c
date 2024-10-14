@@ -811,7 +811,7 @@ static void test_string(void)
 
 int main(void)
 {
-    bl_clock_config();
+    // bl_clock_config();
     bl_timer_init();
     bl_gpio_init();
 
