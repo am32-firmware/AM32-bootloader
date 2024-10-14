@@ -108,21 +108,21 @@ static inline void bl_clock_config(void)
     // at startup, system clock is HSI = 64MHz / 2 = 32MHz
     // the HSI divider at startup is 2
     // here we switch it to 1 so that the system clock is 64MHz
-    RCC->CR &= ~(RCC_CR_HSIDIV_Msk);
-    while (!(RCC->CR & RCC_CR_HSIDIVF))
-    {
-        // wait for hsi to switch over
-    }
+    // RCC->CR &= ~(RCC_CR_HSIDIV_Msk);
+    // while (!(RCC->CR & RCC_CR_HSIDIVF))
+    // {
+    //     // wait for hsi to switch over
+    // }
 
     // enable prefetch buffer
     FLASH->ACR |= FLASH_ACR_PRFTEN;
 
     mpu_config();
 
-    // wait for any ongoing cache invalidation
-    while (ICACHE->CR & ICACHE_SR_BUSYF);
-    // enable icache miss monitor, hit monitor, and icache itself
-    ICACHE->CR |= ICACHE_CR_MISSMEN | ICACHE_CR_HITMEN | ICACHE_CR_EN;
+    // // wait for any ongoing cache invalidation
+    // while (ICACHE->CR & ICACHE_SR_BUSYF);
+    // // enable icache miss monitor, hit monitor, and icache itself
+    // ICACHE->CR |= ICACHE_CR_MISSMEN | ICACHE_CR_HITMEN | ICACHE_CR_EN;
 
     // LL_FLASH_SetLatency(LL_FLASH_LATENCY_1);
 
