@@ -100,8 +100,14 @@ void bl_timer_enable_clock()
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_TIM2);
 }
 
+void bl_timer_enable_gpio()
+{
+
+}
 void bl_timer_configure_gpio()
 {
+	LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+
 	LL_GPIO_InitTypeDef gpio = {0};
 
 	gpio.Pin = LL_GPIO_PIN_5;
@@ -117,8 +123,17 @@ void bl_timer_test_output()
 {
 
 	// modify capture compare mode register (CCMR)
-	// set channel 1 mode to PWM1 (0b0110)
-	TIM2->CCMR1 |= 0b0110 << 0;
+	// note this is only writable when channel is off
+	// (CCER) bit = 0
+	// set channel 1 mode to PWM1 (OC1M = 0b0110)
+	TIM2->CCMR1 |= 0b0110 << 4;
+
+
+	// modify capture compare mode register (CCMR)
+	// note this is only writable when channel is off
+	// (CCER) bit = 0
+	// TIM2->CCMR1 |= 0b00 << 0;
+
 
 	// modify capture compare enable register (CCER)
 	// enable channel 1 capture compare
@@ -143,5 +158,8 @@ int main(void)
 	bl_timer_configure_gpio();
 	bl_timer_enable_clock();
 	bl_timer_test_output();
+	while (1) {
+
+	};
 
 }
