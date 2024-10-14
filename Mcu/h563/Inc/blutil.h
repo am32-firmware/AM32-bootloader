@@ -86,38 +86,39 @@ static inline void bl_timer_reset(void)
     TIM2->CNT = 0;
 }
 
-static inline void mpu_config(void)
+// configure the MPU so that the EEPROM
+// does not throw a fault on access
+static inline void bl_mpu_config(void)
 {
-    // __DMB();
-
     LL_MPU_Disable();
     LL_MPU_ConfigRegion(
         LL_MPU_REGION_NUMBER0,
         LL_MPU_REGION_ALL_RW,
         LL_MPU_ATTRIBUTES_NUMBER0,
-        0x0900a800,
-        0x0900c000
+        // 0x0900a800,
+        // 0x0900c000
+        EEPROM_BASE,
+        EEPROM_BASE + EEPROM_PAGE_SIZE
     );
     LL_MPU_Enable(LL_MPU_CTRL_PRIVILEGED_DEFAULT);
 }
-/*
-  initialise clocks
- */
+
+static inline void bl_hsi_config(void)
+{
+
+}
+
+static inline void bl_flash_enable_prefetch(void)
+{
+    // enable prefetch buffer
+    FLASH->ACR |= FLASH_ACR_PRFTEN;
+}
+
+
 static inline void bl_clock_config(void)
 {
-    // at startup, system clock is HSI = 64MHz / 2 = 32MHz
-    // the HSI divider at startup is 2
-    // here we switch it to 1 so that the system clock is 64MHz
-    // RCC->CR &= ~(RCC_CR_HSIDIV_Msk);
-    // while (!(RCC->CR & RCC_CR_HSIDIVF))
-    // {
-    //     // wait for hsi to switch over
-    // }
-
-    // // enable prefetch buffer
-    // FLASH->ACR |= FLASH_ACR_PRFTEN;
-
-    // mpu_config();
+    bl_flash_enable_prefetch(); 
+    mpu_config();
 
     // // wait for any ongoing cache invalidation
     // while (ICACHE->CR & ICACHE_SR_BUSYF);
