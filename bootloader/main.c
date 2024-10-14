@@ -25,7 +25,7 @@
 
 // use this to check the string output code. When enabled
 // the string HELLO_WORLD is output every 10ms
-#define BOOTLOADER_TEST_STRING
+// #define BOOTLOADER_TEST_STRING
 
 // when there is no app fw yet, disable jump()
 #define DISABLE_JUMP
