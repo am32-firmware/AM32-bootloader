@@ -130,10 +130,10 @@ static inline void bl_icache_config(void)
 
 static inline void bl_clock_config(void)
 {
-    // bl_flash_enable_prefetch(); 
-    // bl_hsi_config();
+    bl_flash_enable_prefetch(); 
+    bl_hsi_config();
     // bl_mpu_config();
-    // bl_icache_config();
+    bl_icache_config();
 }
 
 static inline void bl_gpio_init(void)
