@@ -123,11 +123,16 @@ static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x2B,0x06,0x06,0x01,0x30};
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
 
 #elif BOARD_FLASH_SIZE == 1024
-#define EEPROM_PAGE_SIZE (0x1800)
-#define EEPROM_BASE (0x09000000)
-#define EEPROM_PAGE (7)
+// first bank of high-cycle flash
+#define FLASH_PAGE_SIZE (0x2000)
+#define EEPROM_PAGE_SIZE (0x2000)
+// 0x080f0000 does not read when EDATAEN = 1 and EDATASTR = 7
+// it does read when these bits in the option bytes are cleared
+// the inverse is true of 0x09000000
+#define EEPROM_BASE (0x08000000)
+#define EEPROM_PAGE (126)
 // eeprom address is 0x900a800 with one EDATA high cycle (6kB) page enabled
-#define EEPROM_START_ADD (EEPROM_BASE + EEPROM_PAGE*EEPROM_PAGE_SIZE)
+#define EEPROM_START_ADD (uint32_t)(EEPROM_BASE + EEPROM_PAGE*EEPROM_PAGE_SIZE)
 static uint8_t deviceInfo[9] = {0x34,0x37,0x31,0x64,0x35,0x06,0x06,0x01,0x30};
 #define ADDRESS_SHIFT 0
 
