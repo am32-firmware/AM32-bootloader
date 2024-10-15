@@ -425,7 +425,8 @@ static void decodeInput()
 
 	// will send Ack 0x30 and read input after transfer out callback
 	invalid_command = 0;
-	address = MCU_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
+	// address = MCU_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
+	address = EEPROM_START_ADD + (((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT) - 0xf800);
 	send_ACK();
 
 	return;

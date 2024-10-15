@@ -94,8 +94,10 @@ static inline void bl_mpu_config(void)
         LL_MPU_REGION_NUMBER0,
         LL_MPU_REGION_ALL_RW,
         LL_MPU_ATTRIBUTES_NUMBER0,
-        0x0900a800,
-        0x0900c000
+        // 0x0900a800,
+        // 0x0900c000
+        0x080fc000,
+        0x080fe000
         // EEPROM_BASE,
         // EEPROM_BASE + EEPROM_PAGE_SIZE
     );
@@ -127,12 +129,17 @@ static inline void bl_icache_config(void)
     ICACHE->CR |= ICACHE_CR_MISSMEN | ICACHE_CR_HITMEN | ICACHE_CR_EN;
 
 }
-
+static inline void bl_mask_ecc_nmi(void)
+{
+    RCC->APB3ENR |= RCC_APB3ENR_SBSEN;
+    SBS->ECCNMIR |= SBS_ECCNMIR_ECCNMI_MASK_EN;
+}
 static inline void bl_clock_config(void)
 {
     bl_flash_enable_prefetch(); 
     bl_hsi_config();
-    // bl_mpu_config();
+    bl_mask_ecc_nmi();
+    bl_mpu_config();
     bl_icache_config();
 }
 
