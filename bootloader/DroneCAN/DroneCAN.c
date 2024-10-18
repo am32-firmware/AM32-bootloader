@@ -725,6 +725,15 @@ static void DroneCAN_Startup(void)
             memcpy(fwupdate.path, path, sizeof(path));
         }
     }
+
+    if (node_id == 0) {
+        // check for valid node ID in settings
+        const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+        if (eeprom[0] == 1 && eeprom[176] <= 127) {
+            node_id = eeprom[176];
+        }
+    }
+
     canardSetLocalNodeID(&canard, node_id);
 
     // initialise low level CAN peripheral hardware
