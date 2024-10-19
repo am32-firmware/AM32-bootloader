@@ -20,9 +20,39 @@
 // dummy pin and port so we can re-use blutil.h
 static GPIO_PORT_TYPE input_port;
 static uint32_t input_pin;
-#define FIRMWARE_RELATIVE_START 0x1000
 
 #define MCU_FLASH_START 0x08000000
+
+
+#if !DRONECAN_SUPPORT
+#define FIRMWARE_RELATIVE_START 0x1000
+#else
+
+#define FIRMWARE_RELATIVE_START 0x4000
+
+#define APP_SIGNATURE_MAGIC1 0x68f058e6
+#define APP_SIGNATURE_MAGIC2 0xafcee5a0
+
+/*
+  application signature, filled in by set_app_signature.py
+ */
+const struct {
+    uint32_t magic1;
+    uint32_t magic2;
+    uint32_t fwlen; // total fw length in bytes
+    uint32_t crc1; // crc32 up to start of app_signature
+    uint32_t crc2; // crc32 from end of app_signature to end of fw
+    char mcu[16];
+    uint32_t unused[2];
+} app_signature __attribute__((section(".app_signature"))) = {
+        .magic1 = APP_SIGNATURE_MAGIC1,
+        .magic2 = APP_SIGNATURE_MAGIC2,
+        .fwlen = 0,
+        .crc1 = 0,
+        .crc2 = 0,
+        .mcu = AM32_MCU,
+};
+#endif
 
 /*
   use stringize to construct an include of the right bootloader header

@@ -174,7 +174,7 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 $(H_FILE): $(BIN_FILE)
 	$$(QUIET)python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
 
-$(BLU_ELF_FILE): CFLAGS_BLU := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
+$(BLU_ELF_FILE): CFLAGS_BLU := -DAM32_MCU=\"$(MCU)\" $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
 $(BLU_ELF_FILE): LDFLAGS_BLU := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xBLU_LDSCRIPT)
 $(BLU_ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BLU) $(H_FILE)
 	$$(QUIET)echo building bootloader updater for $(BUILD) with pin $(PIN)
@@ -191,12 +191,13 @@ $(HEX_FILE): $$(ELF_FILE)
 $(BIN_FILE): $$(HEX_FILE)
 
 # Generate bin and hex files for bl updater
-$(BLU_HEX_FILE): $$(BLU_ELF_FILE)
+$(BLU_BIN_FILE): $$(BLU_ELF_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
 	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
+	$$(QUIET)python3 bl_update/set_app_signature.py $$@ $$(<)
 	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
 
-$(BLU_AMJ_FILE): $$(BLU_HEX_FILE)
+$(BLU_AMJ_FILE): $$(BLU_BIN_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
 	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --githash $(shell git rev-parse HEAD) $(BLU_HEX_FILE) $(BLU_AMJ_FILE)
 

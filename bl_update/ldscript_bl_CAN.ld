@@ -25,6 +25,8 @@ SECTIONS
     . = ALIGN(4);
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
+    KEEP(*(.app_signature))
+    . = ALIGN(4);
   } >FLASH
 
   /* The program code and other data goes into FLASH */
