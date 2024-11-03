@@ -723,7 +723,7 @@ static void checkForSignal()
     gpio_mode_set_input(input_pin, GPIO_PULL_DOWN);
 	
     delayMicroseconds(500);
-    if(!gpio_read(input_pin)){
+    if(gpio_read(input_pin)){
     delayMicroseconds(21000); // wait more than one PWM pulse just in case signal source is pulled high
 	}
     for(int i = 0 ; i < 500; i ++){
