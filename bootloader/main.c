@@ -742,18 +742,6 @@ static void checkForSignal()
 #endif
     }
 
-    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
-	
-    delayMicroseconds(500);
-
-    for (int i = 0 ; i < 500; i++) {
-	if( !(gpio_read(input_pin))){
-	    low_pin_count++;
-	}else{
-
-	}
-	delayMicroseconds(10);
-    }
     if (low_pin_count == 0) {
 	return;           // all high while pin is pulled low, bootloader signal
     }
