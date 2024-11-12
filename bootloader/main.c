@@ -843,14 +843,21 @@ static void test_string(void)
 /*
   test operation of backup domain registers
  */
-volatile uint32_t bkup_value;
+volatile struct {
+    uint32_t value;
+    uint32_t fail;
+} bkup;
+
 static void test_rtc_backup(void)
 {
-    uint32_t v = 0;
+    const uint8_t idx = 1;
     while (true) {
-        bkup_value++;
-        set_rtc_backup_register(0, bkup_value);
-        bkup_value = get_rtc_backup_register(0);
+        bkup.value++;
+        set_rtc_backup_register(idx, bkup.value);
+        const uint32_t bkup_value2 = get_rtc_backup_register(idx);
+        if (bkup_value2 != bkup.value) {
+            bkup.fail++;
+        }
         delayMicroseconds(1000);
     }
 }
