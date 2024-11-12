@@ -235,14 +235,27 @@ void CAN1_SE_IRQHandler(void)
   }
 }
 
+static void ertc_init(void)
+{
+    static bool done_init;
+    if (done_init) {
+        return;
+    }
+    done_init = true;
+    crm_periph_clock_enable(CRM_PWC_PERIPH_CLOCK, TRUE);
+    pwc_battery_powered_domain_access(TRUE);
+}
+
 uint32_t get_rtc_backup_register(uint8_t idx)
 {
-    return ertc_bpr_data_read(idx);
+    ertc_init();
+    return ertc_bpr_data_read((ertc_dt_type)idx);
 }
 
 void set_rtc_backup_register(uint8_t idx, uint32_t value)
 {
-    ertc_bpr_data_write(idx, value);
+    ertc_init();
+    ertc_bpr_data_write((ertc_dt_type)idx, value);
 }
 
 #endif // DRONECAN_SUPPORT && defined(ARTERY)
