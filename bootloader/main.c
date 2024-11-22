@@ -748,20 +748,23 @@ static void update_EEPROM()
 }
 #endif // UPDATE_EEPROM_ENABLE
 
+#define low_pin_count_threshold 450		// count signal pin is low before determining jump to main firmware
+#define pull_down_pin_count_interations 4000		// greater interations extend grace period for input devices booting with signal pin high
 static void checkForSignal()
 {
     gpio_mode_set_input(input_pin, GPIO_PULL_DOWN);
 	
     delayMicroseconds(500);
 
-    for(int i = 0 ; i < 500; i ++){
+    for(int i = 0 ; i < pull_down_pin_count_interations ; i ++){
 	if(!gpio_read(input_pin)){
 	    low_pin_count++;
         }
 
 	delayMicroseconds(10);
+	if (low_pin_count > low_pin_count_threshold) i = pull_down_pin_count_interations ;		// end for loop if low_pin_count_threshold has already been exceeded
     }
-    if (low_pin_count > 450) {
+    if (low_pin_count > low_pin_count_threshold) {		// pulled low & majority stayed low - jump to application
 #if CHECK_SOFTWARE_RESET
         if (!bl_was_software_reset()) {
 	    jump();
@@ -784,7 +787,7 @@ static void checkForSignal()
 	delayMicroseconds(10);
     }
     if (low_pin_count == 0) {
-	return;           // all high while pin is pulled low, bootloader signal
+	return;		// pulled high & never low in history - stay in bootloader only
     }
 
     low_pin_count = 0;
@@ -802,7 +805,7 @@ static void checkForSignal()
     }
 
     if (low_pin_count > 0) {
-	jump();
+	jump();		// floating & low at least once - jump to application
     }
 }
 
