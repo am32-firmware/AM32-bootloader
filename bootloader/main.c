@@ -50,11 +50,6 @@
 */
 #define CHECK_EEPROM_BEFORE_JUMP 1
 
-/*
-  should we update the bootloader version in eeprom?
- */
-#define UPDATE_EEPROM_ENABLE 1
-
 #include <string.h>
 
 #ifndef MCU_FLASH_START
