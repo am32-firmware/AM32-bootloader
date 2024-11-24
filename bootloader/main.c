@@ -69,6 +69,10 @@
 #endif
 #endif
 
+#ifndef EEPROM_MAX_SIZE
+#define EEPROM_MAX_SIZE 1024 // must be multiple of 256
+#endif
+
 #ifdef USE_PA2
 #define input_pin        GPIO_PIN(2)
 #define input_port       GPIOA
@@ -737,14 +741,35 @@ static void receiveBuffer()
 #ifdef UPDATE_EEPROM_ENABLE
 static void update_EEPROM()
 {
-    read_flash_bin(rxBuffer , EEPROM_START_ADD , 48);
-    if (BOOTLOADER_VERSION != rxBuffer[2]) {
-	if (rxBuffer[2] == 0xFF || rxBuffer[2] == 0x00){
-	    return;
-	}
-	rxBuffer[2] = BOOTLOADER_VERSION;
-	save_flash_nolib(rxBuffer, 48, EEPROM_START_ADD);
+  if (!bl_was_software_reset()) {
+    // we only update the bootloader version on a software reset to reduce the chances
+    // of a brownout or spark causing a eeprom write that corrupts the settings
+    return;
+  }
+  const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+  if (BOOTLOADER_VERSION != eeprom[2]) {
+    if (eeprom[2] == 0xFF || eeprom[2] == 0x00) {
+      return;
     }
+
+    // update only the bootloader version, preserve all other bytes up to EEPROM_MAX_SIZE
+    uint8_t data[EEPROM_MAX_SIZE];
+    memcpy(data, eeprom, EEPROM_MAX_SIZE);
+    data[2] = BOOTLOADER_VERSION;
+
+    // flash in 256 byte chunks as save_flash_nolib may not support larger chunks
+    uint32_t remaining = EEPROM_MAX_SIZE;
+    uint32_t addr = EEPROM_START_ADD;
+    const uint8_t *p = &data[0];
+
+    while (remaining > 0) {
+      const uint32_t chunk = 256;
+      save_flash_nolib(p, chunk, addr);
+      p += chunk;
+      addr += chunk;
+      remaining -= chunk;
+    }
+  }
 }
 #endif // UPDATE_EEPROM_ENABLE
 
