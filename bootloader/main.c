@@ -428,6 +428,16 @@ static void decodeInput()
 	    return;
 	}
 
+  if (address == EEPROM_START_ADD && payload_buffer_size > 2) {
+      /*
+        if the configuration client is writing the eeprom area
+        then replace the bootloader version byte in the buffer
+        with the right version. This makes the update_EEPROM()
+        less likely to need to erase any flash
+      */
+      payLoadBuffer[2] = BOOTLOADER_VERSION;
+  }
+
 	if (!save_flash_nolib((uint8_t*)payLoadBuffer, payload_buffer_size,address)) {
 	    send_BAD_ACK();
 	} else {
