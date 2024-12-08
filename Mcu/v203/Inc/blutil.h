@@ -93,7 +93,7 @@ static inline bool gpio_read(uint32_t pin)
  */
 static inline void bl_timer_init(void)
 {
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
+    RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
 
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
     TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
@@ -103,9 +103,12 @@ static inline void bl_timer_init(void)
     TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
     TIM_TimeBaseInit(BL_TIMER, &TIM_TimeBaseStructure);
     TIM_SetCounter(BL_TIMER, 0);
-    TIM_ARRPreloadConfig(BL_TIMER, ENABLE);
 
-    TIM_Cmd(BL_TIMER, ENABLE);
+    // enable preload
+    BL_TIMER->CTLR1 |= TIM_ARPE;
+
+    // enable timer
+    BL_TIMER->CTLR1 |= TIM_CEN;
 }
 
 /*
@@ -113,7 +116,7 @@ static inline void bl_timer_init(void)
  */
 static inline void bl_timer_disable(void)
 {
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, DISABLE);
+    RCC->APB2PCENR &= ~RCC_APB2Periph_TIM1;
 }
 
 static inline uint16_t bl_timer_us(void)
