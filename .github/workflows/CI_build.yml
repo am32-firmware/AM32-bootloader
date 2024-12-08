@@ -13,6 +13,7 @@ jobs:
         run: |
           make arm_sdk_install
           make -j8
+          tools/linux/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-size obj/*.elf
 
       - name: Archive build
         uses: actions/upload-artifact@v3
