@@ -2,4 +2,5 @@
   update this file for new releases
  */
 
-#define BOOTLOADER_VERSION 12
+#define BOOTLOADER_VERSION 13
+
