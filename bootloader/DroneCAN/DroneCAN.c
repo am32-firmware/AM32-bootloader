@@ -675,8 +675,16 @@ void DroneCAN_receiveFrame(void)
 {
     CanardCANFrame rx_frame = {0};
     while (sys_can_receive(&rx_frame) > 0) {
-        canardHandleRxFrame(&canard, &rx_frame, micros64());
+      canardHandleRxFrame(&canard, &rx_frame, micros64());
     }
+}
+
+/*
+  handle a frame from interrupt context
+*/
+void DroneCAN_handleFrame(CanardCANFrame *frame)
+{
+    canardHandleRxFrame(&canard, frame, micros64());
 }
 
 /*
