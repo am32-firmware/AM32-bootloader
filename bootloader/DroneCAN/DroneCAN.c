@@ -680,6 +680,14 @@ void DroneCAN_receiveFrame(void)
 }
 
 /*
+  handle a frame from interrupt context
+*/
+void DroneCAN_handleFrame(CanardCANFrame *frame)
+{
+  canardHandleRxFrame(&canard, frame, micros64());
+}
+
+/*
   Transmits all frames from the TX queue
 */
 void DroneCAN_processTxQueue(void)
