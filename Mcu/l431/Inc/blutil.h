@@ -102,15 +102,19 @@ static inline void bl_clock_config(void)
   LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
 
   while (LL_PWR_IsActiveFlag_VOS() != 0) ;
-  LL_RCC_MSI_Enable();
+  LL_RCC_HSI_Enable();
   LL_RCC_LSI_Enable();
 
   /* Wait till MSI and LSI are ready */
   while (LL_RCC_LSI_IsReady() != 1) ;
-  while (LL_RCC_MSI_IsReady() != 1) ;
+  while (LL_RCC_HSI_IsReady() != 1) ;
 
   LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSI);
   LL_RCC_EnableRTC();
+
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSI, LL_RCC_PLLM_DIV_2, 20, LL_RCC_PLLR_DIV_2);
+  LL_RCC_PLL_EnableDomain_SYS();
+  LL_RCC_PLL_Enable();
 
   LL_RCC_MSI_EnableRangeSelection();
   LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_6);
@@ -191,13 +195,10 @@ void SystemInit(void)
 
   /* Reset the RCC clock configuration to the default reset state ------------*/
   /* Set MSION bit */
-  RCC->CR |= RCC_CR_MSION;
+  RCC->CR |= RCC_CR_HSION;
 
   /* Reset CFGR register */
   RCC->CFGR = 0x00000000U;
-
-  /* Reset HSEON, CSSON , HSION, and PLLON bits */
-  RCC->CR &= 0xEAF6FFFFU;
 
   /* Reset PLLCFGR register */
   RCC->PLLCFGR = 0x00001000U;
