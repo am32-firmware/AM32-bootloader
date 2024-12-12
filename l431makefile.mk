@@ -38,12 +38,10 @@ SRC_$(MCU)_BL := $(foreach dir,$(SRC_BASE_DIR_$(MCU)),$(wildcard $(dir)/*.[cs]))
 CFLAGS_DRONECAN_$(MCU) += \
 	-Ibootloader/DroneCAN \
 	-Ibootloader/DroneCAN/libcanard \
-	-Ibootloader/DroneCAN/libcanard/drivers/stm32 \
 	-Ibootloader/DroneCAN/dsdl_generated/include
 
 SRC_DIR_DRONECAN_$(MCU) += bootloader/DroneCAN \
 		bootloader/DroneCAN/dsdl_generated/src \
-		bootloader/DroneCAN/libcanard \
-		bootloader/DroneCAN/libcanard/drivers/stm32
+		bootloader/DroneCAN/libcanard
 
 SRC_DRONECAN_$(MCU) := $(foreach dir,$(SRC_DIR_DRONECAN_$(MCU)),$(wildcard $(dir)/*.[cs]))
