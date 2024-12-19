@@ -333,6 +333,7 @@ static void send_ACK()
     setTransmit();
     serialwriteChar(0x30);             // good ack!
     setReceive();
+    invalid_command = 0;
 }
 
 static void send_BAD_ACK()
@@ -340,6 +341,7 @@ static void send_BAD_ACK()
     setTransmit();
     serialwriteChar(0xC1);                // bad command message.
     setReceive();
+    invalid_command++;
 }
 
 static void send_BAD_CRC_ACK()
@@ -347,6 +349,7 @@ static void send_BAD_CRC_ACK()
     setTransmit();
     serialwriteChar(0xC2);                // bad command message.
     setReceive();
+    invalid_command++;  
 }
 
 static void sendDeviceInfo()
@@ -453,7 +456,6 @@ static void decodeInput()
 	len = 4;  // package without 2 byte crc
 	if (!checkCrc((uint8_t*)rxBuffer, len)) {
 	    send_BAD_CRC_ACK();
-
 	    return;
 	}
 
