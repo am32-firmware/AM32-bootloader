@@ -15,7 +15,7 @@ jobs:
           make updaters -j8
 
       - name: Archive build hex
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: AM32-bootloader-updaters-hex
           path: |
@@ -23,7 +23,7 @@ jobs:
           retention-days: 7
 
       - name: Archive build amj
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: AM32-bootloader-updaters-amj
           path: |
