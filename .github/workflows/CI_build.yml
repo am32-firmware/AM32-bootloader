@@ -16,7 +16,7 @@ jobs:
           tools/linux/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-size obj/*.elf
 
       - name: Archive build
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: AM32-bootloaders
           path: |
