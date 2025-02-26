@@ -139,6 +139,13 @@ static uint16_t invalid_command;
 #endif
 
 /*
+  a bootloader protocol version, sent as byte 8 in the deviceInfo
+  this should change when the configurator applications need to know
+  about a changed feature set in the bootloader
+ */
+#define BOOTLOADER_PROTOCOL_VERSION 2
+
+/*
   the devinfo structure tells the configuration client our pin code,
   flash size and device type. It can also be used by the main firmware
   to confirm we have the right eeprom address and pin code. We have 2
@@ -155,12 +162,19 @@ static const struct {
 } devinfo __attribute__((section(".devinfo"))) = {
   .magic1 = DEVINFO_MAGIC1,
   .magic2 = DEVINFO_MAGIC2,
-  .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,0x01,0x30}
+  .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,BOOTLOADER_PROTOCOL_VERSION,0x30}
 };
 
 typedef void (*pFunction)(void);
 
 #define APPLICATION_ADDRESS     (uint32_t)(MCU_FLASH_START + FIRMWARE_RELATIVE_START)
+
+/*
+  a magic value for CMD_SET_ADDRESS which sets the address to
+  EEPROM_START_ADD. Supported for BOOTLOADER_PROTOCOL_VERSION 2 and
+  later
+ */
+#define ADDRESS_MAGIC_EEPROM 0x20
 
 
 #define CMD_RUN             0x00
@@ -459,12 +473,27 @@ static void decodeInput()
       return;
     }
 
-
-    // will send Ack 0x30 and read input after transfer out callback
     invalid_command = 0;
-    address = MCU_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
-    send_ACK();
 
+    address = rxBuffer[2] << 8 | rxBuffer[3];
+
+    /*
+      check for magic addresses that map to specific areas
+    */
+    if (address == ADDRESS_MAGIC_EEPROM) {
+        // config app has requested access to the eeprom region
+        address = EEPROM_START_ADD;
+    } else if (address < 1024) {
+        // other addresses below 1024 are reserved for future magic values
+        send_BAD_ACK();
+        return;
+    } else {
+        // cope with ADDRESS_SHIFT for 128k flash boards, and add
+        // in MCU base flash address
+        address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
+    }
+
+    send_ACK();
     return;
   }
 
