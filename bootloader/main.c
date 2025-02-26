@@ -149,13 +149,13 @@ static uint16_t invalid_command;
 #define DEVINFO_MAGIC2 0x4eb863d9
 
 static const struct {
-    uint32_t magic1;
-    uint32_t magic2;
-    const uint8_t deviceInfo[9];
+  uint32_t magic1;
+  uint32_t magic2;
+  const uint8_t deviceInfo[9];
 } devinfo __attribute__((section(".devinfo"))) = {
-        .magic1 = DEVINFO_MAGIC1,
-        .magic2 = DEVINFO_MAGIC2,
-        .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,0x01,0x30}
+  .magic1 = DEVINFO_MAGIC1,
+  .magic2 = DEVINFO_MAGIC2,
+  .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,0x01,0x30}
 };
 
 typedef void (*pFunction)(void);
@@ -191,9 +191,10 @@ static uint8_t payLoadBuffer[256];
 static char rxbyte;
 static uint32_t address;
 
-typedef union __attribute__ ((packed)) {
-    uint8_t bytes[2];
-    uint16_t word;
+typedef union __attribute__ ((packed))
+{
+  uint8_t bytes[2];
+  uint16_t word;
 } uint8_16_u;
 
 static uint16_t len;
@@ -214,19 +215,19 @@ static uint16_t us_start;
 
 static void bl_timer_reset(void)
 {
-    us_start = bl_timer_us();
+  us_start = bl_timer_us();
 }
 
 static uint16_t bl_timer_elapsed(void)
 {
-    return bl_timer_us() - us_start;
+  return bl_timer_us() - us_start;
 }
 
 static void delayMicroseconds(uint16_t micros)
 {
-    bl_timer_reset();
-    while (bl_timer_elapsed() < micros) {
-    }
+  bl_timer_reset();
+  while (bl_timer_elapsed() < micros) {
+  }
 }
 
 /*
@@ -236,46 +237,46 @@ static void jump()
 {
 #ifndef DISABLE_JUMP
 #if CHECK_EEPROM_BEFORE_JUMP
-    uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
-    if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
-	invalid_command = 0;
-	return;
-    }
+  uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
+  if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
+    invalid_command = 0;
+    return;
+  }
 #endif
 #ifndef DISABLE_APP_HEADER_CHECKS
-    /*
-      first word of the app is the stack pointer - make sure that it is in range
-     */
-    const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
-    const uint32_t ram_start = 0x20000000;
-    const uint32_t ram_limit_kb = 64;
-    const uint32_t ram_end = ram_start+ram_limit_kb*1024;
-    if (app[0] < ram_start || app[0] > ram_end) {
-	invalid_command = 0;
-	return;
-    }
-    /*
-      2nd word is the entry point of the main app. Ensure that is in range
-     */
-    const uint32_t flash_limit_kb = 256;
-    if (app[1] < APPLICATION_ADDRESS || app[1] > APPLICATION_ADDRESS+flash_limit_kb*1024) {
-	// outside a 256k range, really unlikely to be a valid
-	// application, don't jump
-	invalid_command = 0;
-	return;
-    }
+  /*
+    first word of the app is the stack pointer - make sure that it is in range
+   */
+  const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
+  const uint32_t ram_start = 0x20000000;
+  const uint32_t ram_limit_kb = 64;
+  const uint32_t ram_end = ram_start+ram_limit_kb*1024;
+  if (app[0] < ram_start || app[0] > ram_end) {
+    invalid_command = 0;
+    return;
+  }
+  /*
+    2nd word is the entry point of the main app. Ensure that is in range
+   */
+  const uint32_t flash_limit_kb = 256;
+  if (app[1] < APPLICATION_ADDRESS || app[1] > APPLICATION_ADDRESS+flash_limit_kb*1024) {
+    // outside a 256k range, really unlikely to be a valid
+    // application, don't jump
+    invalid_command = 0;
+    return;
+  }
 #endif // DISABLE_APP_HEADER_CHECKS
 
 #if DRONECAN_SUPPORT
-    if (!DroneCAN_boot_ok()) {
-        invalid_command = 0;
-        return;
-    }
+  if (!DroneCAN_boot_ok()) {
+    invalid_command = 0;
+    return;
+  }
 
-    sys_can_disable_IRQ();
+  sys_can_disable_IRQ();
 #endif
 
-    jump_to_application();
+  jump_to_application();
 #endif
 }
 
@@ -284,154 +285,153 @@ static void jump()
  */
 uint16_t crc16(const uint8_t* pBuff, uint16_t length)
 {
-    uint16_t ret = 0;
+  uint16_t ret = 0;
 
-    for (int i = 0; i < length; i++) {
-        uint8_t xb = pBuff[i];
-	for (uint8_t j = 0; j < 8; j++)
-	{
-            if (((xb & 0x01) ^ (ret & 0x0001)) != 0) {
-                ret >>= 1;
-                ret ^= 0xA001;
-            } else {
-                ret >>= 1;
-            }
-            xb = xb >> 1;
-	}
+  for (int i = 0; i < length; i++) {
+    uint8_t xb = pBuff[i];
+    for (uint8_t j = 0; j < 8; j++) {
+      if (((xb & 0x01) ^ (ret & 0x0001)) != 0) {
+        ret >>= 1;
+        ret ^= 0xA001;
+      } else {
+        ret >>= 1;
+      }
+      xb = xb >> 1;
     }
-    return ret;
+  }
+  return ret;
 }
 
 static bool checkCrc(uint8_t* pBuff, uint16_t length)
 {
-    const uint16_t crcin = pBuff[length] | (pBuff[length+1]<<8);
-    const uint16_t crc2 = crc16(pBuff, length);
+  const uint16_t crcin = pBuff[length] | (pBuff[length+1]<<8);
+  const uint16_t crc2 = crc16(pBuff, length);
 
-    return crcin == crc2;
+  return crcin == crc2;
 }
 
 
 static void setReceive()
 {
-    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
-    received = 0;
+  gpio_mode_set_input(input_pin, GPIO_PULL_UP);
+  received = 0;
 }
 
 static void setTransmit()
 {
-    // set high before we set as output to guarantee idle high
-    gpio_set(input_pin);
-    gpio_mode_set_output(input_pin, GPIO_OUTPUT_PUSH_PULL);
+  // set high before we set as output to guarantee idle high
+  gpio_set(input_pin);
+  gpio_mode_set_output(input_pin, GPIO_OUTPUT_PUSH_PULL);
 
-    // delay a bit to let the sender get setup for receiving
-    delayMicroseconds(BITTIME);
+  // delay a bit to let the sender get setup for receiving
+  delayMicroseconds(BITTIME);
 }
 
 
 static void send_ACK()
 {
-    setTransmit();
-    serialwriteChar(0x30);             // good ack!
-    setReceive();
-    invalid_command = 0;
+  setTransmit();
+  serialwriteChar(0x30);             // good ack!
+  setReceive();
+  invalid_command = 0;
 }
 
 static void send_BAD_ACK()
 {
-    setTransmit();
-    serialwriteChar(0xC1);                // bad command message.
-    setReceive();
-    invalid_command++;
+  setTransmit();
+  serialwriteChar(0xC1);                // bad command message.
+  setReceive();
+  invalid_command++;
 }
 
 static void send_BAD_CRC_ACK()
 {
-    setTransmit();
-    serialwriteChar(0xC2);                // bad command message.
-    setReceive();
-    invalid_command++;  
+  setTransmit();
+  serialwriteChar(0xC2);                // bad command message.
+  setReceive();
+  invalid_command++;
 }
 
 static void sendDeviceInfo()
 {
-    setTransmit();
-    sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
-    setReceive();
+  setTransmit();
+  sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
+  setReceive();
 }
 
 static bool checkAddressWritable(uint32_t address)
 {
-    return address >= APPLICATION_ADDRESS;
+  return address >= APPLICATION_ADDRESS;
 }
 
 static void decodeInput()
 {
-    if (incoming_payload_no_command) {
-	len = payload_buffer_size;
-	if (checkCrc(rxBuffer,len)) {
-	    memset(payLoadBuffer, 0, sizeof(payLoadBuffer));             // reset buffer
+  if (incoming_payload_no_command) {
+    len = payload_buffer_size;
+    if (checkCrc(rxBuffer,len)) {
+      memset(payLoadBuffer, 0, sizeof(payLoadBuffer));             // reset buffer
 
-	    for(int i = 0; i < len; i++){
-		payLoadBuffer[i]= rxBuffer[i];
-	    }
-	    send_ACK();
-	    incoming_payload_no_command = 0;
-	    return;
-	}else{
-	    send_BAD_CRC_ACK();
-	    return;
-	}
+      for (int i = 0; i < len; i++) {
+        payLoadBuffer[i]= rxBuffer[i];
+      }
+      send_ACK();
+      incoming_payload_no_command = 0;
+      return;
+    } else {
+      send_BAD_CRC_ACK();
+      return;
     }
+  }
 
-    cmd = rxBuffer[0];
+  cmd = rxBuffer[0];
 
-    if (rxBuffer[16] == 0x7d) {
-	if(rxBuffer[8] == 13 && rxBuffer[9] == 66) {
-	    sendDeviceInfo();
-	    rxBuffer[20]= 0;
-
-	}
-	return;
-    }
-
-    if (rxBuffer[20] == 0x7d) {
-	if(rxBuffer[12] == 13 && rxBuffer[13] == 66) {
-	    sendDeviceInfo();
-	    rxBuffer[20]= 0;
-	    return;
-	}
+  if (rxBuffer[16] == 0x7d) {
+    if (rxBuffer[8] == 13 && rxBuffer[9] == 66) {
+      sendDeviceInfo();
+      rxBuffer[20]= 0;
 
     }
-    if (rxBuffer[40] == 0x7d) {
-	if (rxBuffer[32] == 13 && rxBuffer[33] == 66) {
-	    sendDeviceInfo();
-	    rxBuffer[20]= 0;
-	    return;
-	}
+    return;
+  }
+
+  if (rxBuffer[20] == 0x7d) {
+    if (rxBuffer[12] == 13 && rxBuffer[13] == 66) {
+      sendDeviceInfo();
+      rxBuffer[20]= 0;
+      return;
     }
 
-    if (cmd == CMD_RUN) {
-	// starts the main app
-	if((rxBuffer[1] == 0) && (rxBuffer[2] == 0) && (rxBuffer[3] == 0)) {
-	    invalid_command = 101;
-	}
+  }
+  if (rxBuffer[40] == 0x7d) {
+    if (rxBuffer[32] == 13 && rxBuffer[33] == 66) {
+      sendDeviceInfo();
+      rxBuffer[20]= 0;
+      return;
+    }
+  }
+
+  if (cmd == CMD_RUN) {
+    // starts the main app
+    if ((rxBuffer[1] == 0) && (rxBuffer[2] == 0) && (rxBuffer[3] == 0)) {
+      invalid_command = 101;
+    }
+  }
+
+  if (cmd == CMD_PROG_FLASH) {
+    len = 2;
+    if (!checkCrc((uint8_t*)rxBuffer, len)) {
+      send_BAD_CRC_ACK();
+
+      return;
     }
 
-    if (cmd == CMD_PROG_FLASH) {
-	len = 2;
-	if (!checkCrc((uint8_t*)rxBuffer, len)) {
-	    send_BAD_CRC_ACK();
+    if (!checkAddressWritable(address)) {
+      send_BAD_ACK();
 
-	    return;
-	}
+      return;
+    }
 
-	if (!checkAddressWritable(address)) {
-	    send_BAD_ACK();
-
-	    return;
-	}
-
-  if (address == EEPROM_START_ADD && payload_buffer_size > 2) {
+    if (address == EEPROM_START_ADD && payload_buffer_size > 2) {
       /*
         if the configuration client is writing the eeprom area
         then replace the bootloader version byte in the buffer
@@ -439,146 +439,146 @@ static void decodeInput()
         less likely to need to erase any flash
       */
       payLoadBuffer[2] = BOOTLOADER_VERSION;
+    }
+
+    if (!save_flash_nolib((uint8_t*)payLoadBuffer, payload_buffer_size,address)) {
+      send_BAD_ACK();
+    } else {
+      send_ACK();
+    }
+
+    return;
   }
 
-	if (!save_flash_nolib((uint8_t*)payLoadBuffer, payload_buffer_size,address)) {
-	    send_BAD_ACK();
-	} else {
-	    send_ACK();
-	}
-
-	return;
+  if (cmd == CMD_SET_ADDRESS) {
+    // command set addressinput format is: CMD, 00 , High byte
+    // address, Low byte address, crclb ,crchb
+    len = 4;  // package without 2 byte crc
+    if (!checkCrc((uint8_t*)rxBuffer, len)) {
+      send_BAD_CRC_ACK();
+      return;
     }
 
-    if (cmd == CMD_SET_ADDRESS) {
-	// command set addressinput format is: CMD, 00 , High byte
-	// address, Low byte address, crclb ,crchb
-	len = 4;  // package without 2 byte crc
-	if (!checkCrc((uint8_t*)rxBuffer, len)) {
-	    send_BAD_CRC_ACK();
-	    return;
-	}
 
+    // will send Ack 0x30 and read input after transfer out callback
+    invalid_command = 0;
+    address = MCU_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
+    send_ACK();
 
-	// will send Ack 0x30 and read input after transfer out callback
-	invalid_command = 0;
-	address = MCU_FLASH_START + ((rxBuffer[2] << 8 | rxBuffer[3]) << ADDRESS_SHIFT);
-	send_ACK();
+    return;
+  }
 
-	return;
+  if (cmd == CMD_SET_BUFFER) {
+    // for writing buffer rx buffer 0 = command byte.  command set
+    // address, input , format is CMD, 00 , 00 or 01 (if buffer is 256),
+    // buffer_size,
+    len = 4;  // package without 2 byte crc
+    if (!checkCrc((uint8_t*)rxBuffer, len)) {
+      send_BAD_CRC_ACK();
+
+      return;
     }
 
-    if (cmd == CMD_SET_BUFFER) {
-	// for writing buffer rx buffer 0 = command byte.  command set
-	// address, input , format is CMD, 00 , 00 or 01 (if buffer is 256),
-	// buffer_size,
-	len = 4;  // package without 2 byte crc
-	if (!checkCrc((uint8_t*)rxBuffer, len)) {
-	    send_BAD_CRC_ACK();
-
-	    return;
-	}
-
-        // no ack with command set buffer;
-       	if(rxBuffer[2] == 0x01){
-	    payload_buffer_size = 256;                          // if nothing in this buffer
-       	}else{
-	    payload_buffer_size = rxBuffer[3];
-        }
-	incoming_payload_no_command = 1;
-	address_expected_increment = 256;
-        setReceive();
-
-        return;
+    // no ack with command set buffer;
+    if (rxBuffer[2] == 0x01) {
+      payload_buffer_size = 256;                          // if nothing in this buffer
+    } else {
+      payload_buffer_size = rxBuffer[3];
     }
+    incoming_payload_no_command = 1;
+    address_expected_increment = 256;
+    setReceive();
 
-    if (cmd == CMD_KEEP_ALIVE) {
-	len = 2;
-	if (!checkCrc((uint8_t*)rxBuffer, len)) {
-	    send_BAD_CRC_ACK();
+    return;
+  }
 
-	    return;
-	}
+  if (cmd == CMD_KEEP_ALIVE) {
+    len = 2;
+    if (!checkCrc((uint8_t*)rxBuffer, len)) {
+      send_BAD_CRC_ACK();
 
-	setTransmit();
-	serialwriteChar(0xC1);                // bad command message.
-	setReceive();
-
-	return;
-    }
-
-    if (cmd == CMD_ERASE_FLASH) {
-	len = 2;
-	if (!checkCrc((uint8_t*)rxBuffer, len)) {
-	    send_BAD_CRC_ACK();
-
-	    return;
-	}
-
-	if (!checkAddressWritable(address)) {
-	    send_BAD_ACK();
-
-	    return;
-	}
-
-	send_ACK();
-	return;
-    }
-
-    if (cmd == CMD_READ_EEPROM) {
-	eeprom_req = 1;
-    }
-
-    if (cmd == CMD_READ_FLASH_SIL) {
-	// for sending contents of flash memory at the memory location set in
-	// bootloader.c need to still set memory with data from set mem
-	// command
-	len = 2;
-	if (!checkCrc((uint8_t*)rxBuffer, len)) {
-	    send_BAD_CRC_ACK();
-
-	    return;
-	}
-
-	count++;
-	uint16_t out_buffer_size = rxBuffer[1];//
-	if(out_buffer_size == 0){
-	    out_buffer_size = 256;
-	}
-	address_expected_increment = 128;
-
-	setTransmit();
-	uint8_t read_data[out_buffer_size + 3];        // make buffer 3 larger to fit CRC and ACK
-	memset(read_data, 0, sizeof(read_data));
-        //    read_flash((uint8_t*)read_data , address);                 // make sure read_flash reads two less than buffer.
-	read_flash_bin((uint8_t*)read_data , address, out_buffer_size);
-
-        const uint16_t crc = crc16(read_data,out_buffer_size);
-        read_data[out_buffer_size] = crc&0xFF;
-        read_data[out_buffer_size + 1] = crc>>8;
-        read_data[out_buffer_size + 2] = 0x30;
-        sendString(read_data, out_buffer_size+3);
-
-	setReceive();
-
-	return;
+      return;
     }
 
     setTransmit();
-
     serialwriteChar(0xC1);                // bad command message.
-    invalid_command++;
     setReceive();
+
+    return;
+  }
+
+  if (cmd == CMD_ERASE_FLASH) {
+    len = 2;
+    if (!checkCrc((uint8_t*)rxBuffer, len)) {
+      send_BAD_CRC_ACK();
+
+      return;
+    }
+
+    if (!checkAddressWritable(address)) {
+      send_BAD_ACK();
+
+      return;
+    }
+
+    send_ACK();
+    return;
+  }
+
+  if (cmd == CMD_READ_EEPROM) {
+    eeprom_req = 1;
+  }
+
+  if (cmd == CMD_READ_FLASH_SIL) {
+    // for sending contents of flash memory at the memory location set in
+    // bootloader.c need to still set memory with data from set mem
+    // command
+    len = 2;
+    if (!checkCrc((uint8_t*)rxBuffer, len)) {
+      send_BAD_CRC_ACK();
+
+      return;
+    }
+
+    count++;
+    uint16_t out_buffer_size = rxBuffer[1];//
+    if (out_buffer_size == 0) {
+      out_buffer_size = 256;
+    }
+    address_expected_increment = 128;
+
+    setTransmit();
+    uint8_t read_data[out_buffer_size + 3];        // make buffer 3 larger to fit CRC and ACK
+    memset(read_data, 0, sizeof(read_data));
+    //    read_flash((uint8_t*)read_data , address);                 // make sure read_flash reads two less than buffer.
+    read_flash_bin((uint8_t*)read_data, address, out_buffer_size);
+
+    const uint16_t crc = crc16(read_data,out_buffer_size);
+    read_data[out_buffer_size] = crc&0xFF;
+    read_data[out_buffer_size + 1] = crc>>8;
+    read_data[out_buffer_size + 2] = 0x30;
+    sendString(read_data, out_buffer_size+3);
+
+    setReceive();
+
+    return;
+  }
+
+  setTransmit();
+
+  serialwriteChar(0xC1);                // bad command message.
+  invalid_command++;
+  setReceive();
 }
 
 #ifdef SERIAL_STATS
 // stats for debugging serial protocol
 struct {
-    uint32_t no_idle;
-    uint32_t no_start;
-    uint32_t bad_start;
-    uint32_t bad_stop;
-    uint32_t good;
+  uint32_t no_idle;
+  uint32_t no_start;
+  uint32_t bad_start;
+  uint32_t bad_stop;
+  uint32_t good;
 } stats;
 #endif
 
@@ -589,165 +589,165 @@ struct {
  */
 static bool serialreadChar()
 {
-    rxbyte=0;
-    bl_timer_reset();
+  rxbyte=0;
+  bl_timer_reset();
 
-    // UART is idle high, wait for it to be in the idle state
-    while (!gpio_read(input_pin)) { // wait for rx to go high
-        if (bl_timer_elapsed() > 20000U) {
-	    /*
-	      if we don't get a command for 20ms then assume we should
-	      be trying to boot the main firmware, invalid_command 101
-	      triggers the jump immediately
-	     */
-	    invalid_command = 101;
+  // UART is idle high, wait for it to be in the idle state
+  while (!gpio_read(input_pin)) { // wait for rx to go high
+    if (bl_timer_elapsed() > 20000U) {
+      /*
+        if we don't get a command for 20ms then assume we should
+        be trying to boot the main firmware, invalid_command 101
+        triggers the jump immediately
+       */
+      invalid_command = 101;
 #ifdef SERIAL_STATS
-	    stats.no_idle++;
+      stats.no_idle++;
 #endif
-	    return false;
-	}
+      return false;
     }
+  }
 
-    // now we need to wait for the start bit leading edge, which is low
-    bl_timer_reset();
-    while (gpio_read(input_pin)) {
-        if (bl_timer_elapsed() > 5*BITTIME) {
+  // now we need to wait for the start bit leading edge, which is low
+  bl_timer_reset();
+  while (gpio_read(input_pin)) {
+    if (bl_timer_elapsed() > 5*BITTIME) {
 #if DRONECAN_SUPPORT
-            if (DroneCAN_update()) {
-                jump();
-            }
+      if (DroneCAN_update()) {
+        jump();
+      }
 #endif
-            if (messagereceived) {
-                // we've been waiting too long, don't allow for long gaps
-                // between bytes
+      if (messagereceived) {
+        // we've been waiting too long, don't allow for long gaps
+        // between bytes
 #ifdef SERIAL_STATS
-                stats.no_start++;
+        stats.no_start++;
 #endif
-                return false;
-            }
-        }
+        return false;
+      }
     }
+  }
 
-    // wait to get the center of bit time. We want to sample at the
-    // middle of each bit
-    delayMicroseconds(HALFBITTIME);
-    if (gpio_read(input_pin)) {
-	// bad framing, we should be half-way through the start bit
-	// which should still be low
+  // wait to get the center of bit time. We want to sample at the
+  // middle of each bit
+  delayMicroseconds(HALFBITTIME);
+  if (gpio_read(input_pin)) {
+    // bad framing, we should be half-way through the start bit
+    // which should still be low
 #ifdef SERIAL_STATS
-	stats.bad_start++;
+    stats.bad_start++;
 #endif
-	return false;
-    }
+    return false;
+  }
 
-    /*
-      now sample the 8 data bits
-     */
-    int bits_to_read = 0;
-    while (bits_to_read < 8) {
-	delayMicroseconds(BITTIME);
-	rxbyte = rxbyte | gpio_read(input_pin) << bits_to_read;
-	bits_to_read++;
-    }
-
-    // wait till middle of stop bit, so we can check that too
+  /*
+    now sample the 8 data bits
+   */
+  int bits_to_read = 0;
+  while (bits_to_read < 8) {
     delayMicroseconds(BITTIME);
-    if (!gpio_read(input_pin)) {
-	// bad framing, stop bit should be high
-#ifdef SERIAL_STATS
-	stats.bad_stop++;
-#endif
-	return false;
-    }
+    rxbyte = rxbyte | gpio_read(input_pin) << bits_to_read;
+    bits_to_read++;
+  }
 
-    // we got a good byte
-    messagereceived = 1;
-    receiveByte = rxbyte;
+  // wait till middle of stop bit, so we can check that too
+  delayMicroseconds(BITTIME);
+  if (!gpio_read(input_pin)) {
+    // bad framing, stop bit should be high
 #ifdef SERIAL_STATS
-    stats.good++;
+    stats.bad_stop++;
 #endif
-    return true;
+    return false;
+  }
+
+  // we got a good byte
+  messagereceived = 1;
+  receiveByte = rxbyte;
+#ifdef SERIAL_STATS
+  stats.good++;
+#endif
+  return true;
 }
 
 
 static void serialwriteChar(uint8_t data)
 {
-    // start bit is low
-    gpio_clear(input_pin);
-    delayMicroseconds(BITTIME);
+  // start bit is low
+  gpio_clear(input_pin);
+  delayMicroseconds(BITTIME);
 
-    // send data bits
-    uint8_t bits_written = 0;
-    while (bits_written < 8) {
-	if (data & 0x01) {
-	    gpio_set(input_pin);
-	} else {
-	    // GPIO_BC(input_port) = input_pin;
-	    gpio_clear(input_pin);
-	}
-	bits_written++;
-	data = data >> 1;
-	delayMicroseconds(BITTIME);
+  // send data bits
+  uint8_t bits_written = 0;
+  while (bits_written < 8) {
+    if (data & 0x01) {
+      gpio_set(input_pin);
+    } else {
+      // GPIO_BC(input_port) = input_pin;
+      gpio_clear(input_pin);
     }
+    bits_written++;
+    data = data >> 1;
+    delayMicroseconds(BITTIME);
+  }
 
-    // send stop bit
-    gpio_set(input_pin);
+  // send stop bit
+  gpio_set(input_pin);
 
-    /*
-      note that we skip the delay by BITTIME for the full stop bit and
-      do it in sendString() instead to ensure when sending an ACK
-      immediately followed by a setReceive() on a slow MCU that we
-      start on the receive as soon as possible.
-    */
+  /*
+    note that we skip the delay by BITTIME for the full stop bit and
+    do it in sendString() instead to ensure when sending an ACK
+    immediately followed by a setReceive() on a slow MCU that we
+    start on the receive as soon as possible.
+  */
 }
 
 
 static void sendString(const uint8_t *data, int len)
 {
-    for(int i = 0; i < len; i++){
-        serialwriteChar(data[i]);
-        // for multi-byte writes we add the stop bit delay
-        delayMicroseconds(BITTIME);
-    }
+  for (int i = 0; i < len; i++) {
+    serialwriteChar(data[i]);
+    // for multi-byte writes we add the stop bit delay
+    delayMicroseconds(BITTIME);
+  }
 }
 
 static void receiveBuffer()
 {
-    count = 0;
-    messagereceived = 0;
-    memset(rxBuffer, 0, sizeof(rxBuffer));
+  count = 0;
+  messagereceived = 0;
+  memset(rxBuffer, 0, sizeof(rxBuffer));
 
-    setReceive();
+  setReceive();
 
-    for(uint32_t i = 0; i < sizeof(rxBuffer); i++){
-	if (!serialreadChar()) {
-	    break;
-	}
-
-	if(incoming_payload_no_command) {
-	    if(count == payload_buffer_size+2){
-		break;
-	    }
-	    rxBuffer[i] = rxbyte;
-	    count++;
-	} else {
-            if(bl_timer_elapsed() > 250){
-	
-		count = 0;
-
-		break;
-	    } else {
-		rxBuffer[i] = rxbyte;
-		if(i == 257){
-		    invalid_command+=20;       // needs one hundred to trigger a jump but will be reset on next set address commmand
-
-		}
-	    }
-	}
+  for (uint32_t i = 0; i < sizeof(rxBuffer); i++) {
+    if (!serialreadChar()) {
+      break;
     }
-    if (messagereceived) {
-	decodeInput();
+
+    if (incoming_payload_no_command) {
+      if (count == payload_buffer_size+2) {
+        break;
+      }
+      rxBuffer[i] = rxbyte;
+      count++;
+    } else {
+      if (bl_timer_elapsed() > 250) {
+
+        count = 0;
+
+        break;
+      } else {
+        rxBuffer[i] = rxbyte;
+        if (i == 257) {
+          invalid_command+=20;       // needs one hundred to trigger a jump but will be reset on next set address commmand
+
+        }
+      }
     }
+  }
+  if (messagereceived) {
+    decodeInput();
+  }
 }
 
 #ifdef UPDATE_EEPROM_ENABLE
@@ -789,61 +789,63 @@ static void update_EEPROM()
 #define pull_down_pin_count_interations 4000		// greater interations extend grace period for input devices booting with signal pin high
 static void checkForSignal()
 {
-    gpio_mode_set_input(input_pin, GPIO_PULL_DOWN);
-	
-    delayMicroseconds(500);
+  gpio_mode_set_input(input_pin, GPIO_PULL_DOWN);
 
-    for(int i = 0 ; i < pull_down_pin_count_interations ; i ++){
-	if(!gpio_read(input_pin)){
-	    low_pin_count++;
-        }
+  delayMicroseconds(500);
 
-	delayMicroseconds(10);
-	if (low_pin_count > low_pin_count_threshold) i = pull_down_pin_count_interations ;		// end for loop if low_pin_count_threshold has already been exceeded
+  for (int i = 0 ; i < pull_down_pin_count_interations ; i ++) {
+    if (!gpio_read(input_pin)) {
+      low_pin_count++;
     }
-    if (low_pin_count > low_pin_count_threshold) {		// pulled low & majority stayed low - jump to application
+
+    delayMicroseconds(10);
+    if (low_pin_count > low_pin_count_threshold) {
+      i = pull_down_pin_count_interations ;  // end for loop if low_pin_count_threshold has already been exceeded
+    }
+  }
+  if (low_pin_count > low_pin_count_threshold) {		// pulled low & majority stayed low - jump to application
 #if CHECK_SOFTWARE_RESET
-        if (!bl_was_software_reset()) {
-	    jump();
-        }
+    if (!bl_was_software_reset()) {
+      jump();
+    }
 #else
-        jump();
+    jump();
 #endif
+  }
+
+  gpio_mode_set_input(input_pin, GPIO_PULL_UP);
+
+  delayMicroseconds(500);
+
+  for (int i = 0 ; i < 500; i++) {
+    if ( !(gpio_read(input_pin))) {
+      low_pin_count++;
+    } else {
+
+    }
+    delayMicroseconds(10);
+  }
+  if (low_pin_count == 0) {
+    return;		// pulled high & never low in history - stay in bootloader only
+  }
+
+  low_pin_count = 0;
+
+  gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
+
+  delayMicroseconds(500);
+
+  for (int i = 0 ; i < 500; i ++) {
+    if ( !(gpio_read(input_pin))) {
+      low_pin_count++;
     }
 
-    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
-	
-    delayMicroseconds(500);
+    delayMicroseconds(10);
+  }
 
-    for (int i = 0 ; i < 500; i++) {
-	if( !(gpio_read(input_pin))){
-	    low_pin_count++;
-	}else{
-
-	}
-	delayMicroseconds(10);
-    }
-    if (low_pin_count == 0) {
-	return;		// pulled high & never low in history - stay in bootloader only
-    }
-
-    low_pin_count = 0;
-
-    gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
-
-    delayMicroseconds(500);
-
-    for (int i = 0 ; i < 500; i ++) {
-	if( !(gpio_read(input_pin))){
-	    low_pin_count++;
-	}
-
-	delayMicroseconds(10);
-    }
-
-    if (low_pin_count > 0) {
-	jump();		// floating & low at least once - jump to application
-    }
+  if (low_pin_count > 0) {
+    jump();		// floating & low at least once - jump to application
+  }
 }
 
 #ifdef BOOTLOADER_TEST_CLOCK
@@ -852,15 +854,15 @@ static void checkForSignal()
  */
 static void test_clock(void)
 {
-    setTransmit();
-    while (1) {
-	gpio_clear(input_pin);
-        bl_timer_reset();
-        while (bl_timer_elapsed() < 2000) ;
-	gpio_set(input_pin);
-        bl_timer_reset();
-        while (bl_timer_elapsed() < 1000) ;
-    }
+  setTransmit();
+  while (1) {
+    gpio_clear(input_pin);
+    bl_timer_reset();
+    while (bl_timer_elapsed() < 2000) ;
+    gpio_set(input_pin);
+    bl_timer_reset();
+    while (bl_timer_elapsed() < 1000) ;
+  }
 }
 #endif // BOOTLOADER_TEST_CLOCK
 
@@ -870,11 +872,11 @@ static void test_clock(void)
  */
 static void test_string(void)
 {
-    setTransmit();
-    while (1) {
-        delayMicroseconds(10000);
-        sendString((uint8_t*)"HELLO_WORLD",11);
-    }
+  setTransmit();
+  while (1) {
+    delayMicroseconds(10000);
+    sendString((uint8_t*)"HELLO_WORLD",11);
+  }
 }
 #endif // BOOTLOADER_TEST_STRING
 
@@ -884,62 +886,62 @@ static void test_string(void)
   test operation of backup domain registers
  */
 volatile struct {
-    uint32_t value;
-    uint32_t fail;
+  uint32_t value;
+  uint32_t fail;
 } bkup;
 
 static void test_rtc_backup(void)
 {
-    const uint8_t idx = 1;
-    while (true) {
-        bkup.value++;
-        set_rtc_backup_register(idx, bkup.value);
-        const uint32_t bkup_value2 = get_rtc_backup_register(idx);
-        if (bkup_value2 != bkup.value) {
-            bkup.fail++;
-        }
-        delayMicroseconds(1000);
+  const uint8_t idx = 1;
+  while (true) {
+    bkup.value++;
+    set_rtc_backup_register(idx, bkup.value);
+    const uint32_t bkup_value2 = get_rtc_backup_register(idx);
+    if (bkup_value2 != bkup.value) {
+      bkup.fail++;
     }
+    delayMicroseconds(1000);
+  }
 }
 #endif
 
 int main(void)
 {
-    bl_clock_config();
-    bl_timer_init();
-    bl_gpio_init();
+  bl_clock_config();
+  bl_timer_init();
+  bl_gpio_init();
 
 #ifdef BOOTLOADER_TEST_CLOCK
-    test_clock();
+  test_clock();
 #endif
 #ifdef BOOTLOADER_TEST_STRING
-    test_string();
+  test_string();
 #endif
 #ifdef BOOTLOADER_TEST_BKUP
-    test_rtc_backup();
+  test_rtc_backup();
 #endif
 
-    checkForSignal();
+  checkForSignal();
 
-    gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
-		
+  gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
+
 #ifdef USE_ADC_INPUT  // go right to application
-    jump();
+  jump();
 #endif
 
 #ifdef UPDATE_EEPROM_ENABLE
-     update_EEPROM();
+  update_EEPROM();
 #endif
 
-    while (1) {
-	  receiveBuffer();
-	  if (invalid_command > 100) {
-	      jump();
-          }
-#if DRONECAN_SUPPORT
-          if (DroneCAN_update()) {
-              jump();
-          }
-#endif
+  while (1) {
+    receiveBuffer();
+    if (invalid_command > 100) {
+      jump();
     }
+#if DRONECAN_SUPPORT
+    if (DroneCAN_update()) {
+      jump();
+    }
+#endif
+  }
 }

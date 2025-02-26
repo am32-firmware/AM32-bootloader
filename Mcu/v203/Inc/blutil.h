@@ -33,57 +33,57 @@
 
 static NOINLINE void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
-    volatile uint32_t *cfgr;
-    if (pin >= GPIO_PIN(8)) {
-        pin >>= 8;
-        cfgr = &input_port->CFGHR;
-    } else {
-        cfgr = &input_port->CFGLR;
-    }
-    const uint32_t mul = pin*pin*pin*pin;
-    const uint32_t CFG = (*cfgr) & ~(0xf * mul);
-    switch (pull_up_down) {
-    case GPIO_PULL_NONE:
-        *cfgr = CFG | (0x4*mul);
-	break;
-    case GPIO_PULL_UP:
-        input_port->OUTDR |= pin;
-        *cfgr = CFG | (0x8*mul);
-        break;
-    case GPIO_PULL_DOWN:
-        input_port->OUTDR &= ~pin;
-        *cfgr = CFG | (0x8*mul);
-        break;
-    }
+  volatile uint32_t *cfgr;
+  if (pin >= GPIO_PIN(8)) {
+    pin >>= 8;
+    cfgr = &input_port->CFGHR;
+  } else {
+    cfgr = &input_port->CFGLR;
+  }
+  const uint32_t mul = pin*pin*pin*pin;
+  const uint32_t CFG = (*cfgr) & ~(0xf * mul);
+  switch (pull_up_down) {
+  case GPIO_PULL_NONE:
+    *cfgr = CFG | (0x4*mul);
+    break;
+  case GPIO_PULL_UP:
+    input_port->OUTDR |= pin;
+    *cfgr = CFG | (0x8*mul);
+    break;
+  case GPIO_PULL_DOWN:
+    input_port->OUTDR &= ~pin;
+    *cfgr = CFG | (0x8*mul);
+    break;
+  }
 }
 
 static inline void gpio_mode_set_output(uint32_t pin, uint32_t output_mode)
 {
-    volatile uint32_t *cfgr;
-    if (pin >= GPIO_PIN(8)) {
-        pin >>= 8;
-        cfgr = &input_port->CFGHR;
-    } else {
-        cfgr = &input_port->CFGLR;
-    }
-    const uint32_t mul = pin*pin*pin*pin;
-    const uint32_t CFG = (*cfgr) & ~(0xf * mul);
-    (*cfgr) = CFG | (output_mode*mul);
+  volatile uint32_t *cfgr;
+  if (pin >= GPIO_PIN(8)) {
+    pin >>= 8;
+    cfgr = &input_port->CFGHR;
+  } else {
+    cfgr = &input_port->CFGLR;
+  }
+  const uint32_t mul = pin*pin*pin*pin;
+  const uint32_t CFG = (*cfgr) & ~(0xf * mul);
+  (*cfgr) = CFG | (output_mode*mul);
 }
 
 static inline void gpio_set(uint32_t pin)
 {
-    input_port->BSHR = pin;
+  input_port->BSHR = pin;
 }
 
 static inline void gpio_clear(uint32_t pin)
 {
-    input_port->BCR = pin;
+  input_port->BCR = pin;
 }
 
 static inline bool gpio_read(uint32_t pin)
 {
-    return (input_port->INDR & pin) != 0;
+  return (input_port->INDR & pin) != 0;
 }
 
 #define BL_TIMER TIM1
@@ -93,22 +93,22 @@ static inline bool gpio_read(uint32_t pin)
  */
 static inline void bl_timer_init(void)
 {
-    RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
+  RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
 
-    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-    TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
-    TIM_TimeBaseStructure.TIM_Prescaler = 47;
-    TIM_TimeBaseStructure.TIM_Period = 0xFFFF;
-    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
-    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-    TIM_TimeBaseInit(BL_TIMER, &TIM_TimeBaseStructure);
-    TIM_SetCounter(BL_TIMER, 0);
+  TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+  TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
+  TIM_TimeBaseStructure.TIM_Prescaler = 47;
+  TIM_TimeBaseStructure.TIM_Period = 0xFFFF;
+  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+  TIM_TimeBaseInit(BL_TIMER, &TIM_TimeBaseStructure);
+  TIM_SetCounter(BL_TIMER, 0);
 
-    // enable preload
-    BL_TIMER->CTLR1 |= TIM_ARPE;
+  // enable preload
+  BL_TIMER->CTLR1 |= TIM_ARPE;
 
-    // enable timer
-    BL_TIMER->CTLR1 |= TIM_CEN;
+  // enable timer
+  BL_TIMER->CTLR1 |= TIM_CEN;
 }
 
 /*
@@ -116,12 +116,12 @@ static inline void bl_timer_init(void)
  */
 static inline void bl_timer_disable(void)
 {
-    RCC->APB2PCENR &= ~RCC_APB2Periph_TIM1;
+  RCC->APB2PCENR &= ~RCC_APB2Periph_TIM1;
 }
 
 static inline uint16_t bl_timer_us(void)
 {
-    return BL_TIMER->CNT;
+  return BL_TIMER->CNT;
 }
 
 /*
@@ -129,20 +129,20 @@ static inline uint16_t bl_timer_us(void)
  */
 static inline void bl_clock_config(void)
 {
-    SystemInit();
+  SystemInit();
 }
 
 static inline void bl_gpio_init(void)
 {
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE );
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE );
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE );
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE );
 
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_StructInit(&GPIO_InitStruct);
-    GPIO_InitStruct.GPIO_Pin   = input_pin;
-    GPIO_InitStruct.GPIO_Mode  = GPIO_Mode_IN_FLOATING;
-    GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(input_port, &GPIO_InitStruct);
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_StructInit(&GPIO_InitStruct);
+  GPIO_InitStruct.GPIO_Pin   = input_pin;
+  GPIO_InitStruct.GPIO_Mode  = GPIO_Mode_IN_FLOATING;
+  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(input_port, &GPIO_InitStruct);
 }
 
 /*
@@ -150,12 +150,12 @@ static inline void bl_gpio_init(void)
  */
 static inline bool bl_was_software_reset(void)
 {
-    return (RCC->RSTSCKR & RCC_SFTRSTF) != 0;
+  return (RCC->RSTSCKR & RCC_SFTRSTF) != 0;
 }
 
 void Error_Handler()
 {
-    while (1) {}
+  while (1) {}
 }
 
 /*
@@ -163,17 +163,17 @@ void Error_Handler()
  */
 static inline void jump_to_application(void)
 {
-    __disable_irq();
-    bl_timer_disable();
-    const uint32_t app_address = FIRMWARE_RELATIVE_START;
-    const uint32_t stack_top = RAM_BASE + RAM_SIZE;
+  __disable_irq();
+  bl_timer_disable();
+  const uint32_t app_address = FIRMWARE_RELATIVE_START;
+  const uint32_t stack_top = RAM_BASE + RAM_SIZE;
 
-    // set the stack pointer and jump to the application
-    asm volatile(
-	"mv sp, %0 \n"
-	"jr %1 \n"
-        :                      // No output operands
-        : "r"(stack_top), "r"(app_address)
-        :                      // No clobbered registers
-    );
+  // set the stack pointer and jump to the application
+  asm volatile(
+    "mv sp, %0 \n"
+    "jr %1 \n"
+    :                      // No output operands
+    : "r"(stack_top), "r"(app_address)
+    :                      // No clobbered registers
+  );
 }
