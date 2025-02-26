@@ -54,6 +54,11 @@ extern void DroneCAN_processTxQueue();
 extern void DroneCAN_receiveFrame();
 
 /*
+  called from IRQ to handle incoming frame
+ */
+void DroneCAN_handleFrame(CanardCANFrame *frame);
+
+/*
   try to transmit a frame.
   return 1 for success, 0 for no space, -ve for error
  */
