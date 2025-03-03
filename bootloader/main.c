@@ -197,7 +197,6 @@ static int count;
 static char messagereceived;
 static uint16_t address_expected_increment;
 static int cmd;
-static char eeprom_req;
 static int received;
 
 static uint8_t rxBuffer[258];
@@ -219,6 +218,7 @@ static char incoming_payload_no_command;
 static void sendString(const uint8_t data[], int len);
 static void receiveBuffer();
 static void serialwriteChar(uint8_t data);
+static void serialwriteOneChar(uint8_t data);
 
 #define BAUDRATE      19200
 #define BITTIME          52 // 1000000/BAUDRATE
@@ -341,36 +341,34 @@ static void setTransmit()
   delayMicroseconds(BITTIME);
 }
 
+static void serialwriteOneChar(uint8_t c)
+{
+  setTransmit();
+  serialwriteChar(c);
+  setReceive();
+}
 
 static void send_ACK()
 {
-  setTransmit();
-  serialwriteChar(0x30);             // good ack!
-  setReceive();
+  serialwriteOneChar(0x30);             // good ack!
   invalid_command = 0;
 }
 
 static void send_BAD_ACK()
 {
-  setTransmit();
-  serialwriteChar(0xC1);                // bad command message.
-  setReceive();
+  serialwriteOneChar(0xC1);                // bad command message.
   invalid_command++;
 }
 
 static void send_BAD_CRC_ACK()
 {
-  setTransmit();
-  serialwriteChar(0xC2);                // bad command message.
-  setReceive();
+  serialwriteOneChar(0xC2);                // bad command message.
   invalid_command++;
 }
 
 static void sendDeviceInfo()
 {
-  setTransmit();
   sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
-  setReceive();
 }
 
 static bool checkAddressWritable(uint32_t address)
@@ -529,9 +527,7 @@ static void decodeInput()
       return;
     }
 
-    setTransmit();
-    serialwriteChar(0xC1);                // bad command message.
-    setReceive();
+    serialwriteOneChar(0xC1);                // bad command message.
 
     return;
   }
@@ -554,10 +550,6 @@ static void decodeInput()
     return;
   }
 
-  if (cmd == CMD_READ_EEPROM) {
-    eeprom_req = 1;
-  }
-
   if (cmd == CMD_READ_FLASH_SIL) {
     // for sending contents of flash memory at the memory location set in
     // bootloader.c need to still set memory with data from set mem
@@ -576,7 +568,6 @@ static void decodeInput()
     }
     address_expected_increment = 128;
 
-    setTransmit();
     uint8_t read_data[out_buffer_size + 3];        // make buffer 3 larger to fit CRC and ACK
     memset(read_data, 0, sizeof(read_data));
     //    read_flash((uint8_t*)read_data , address);                 // make sure read_flash reads two less than buffer.
@@ -588,16 +579,11 @@ static void decodeInput()
     read_data[out_buffer_size + 2] = 0x30;
     sendString(read_data, out_buffer_size+3);
 
-    setReceive();
-
     return;
   }
 
-  setTransmit();
-
-  serialwriteChar(0xC1);                // bad command message.
+  serialwriteOneChar(0xC1);                // bad command message.
   invalid_command++;
-  setReceive();
 }
 
 #ifdef SERIAL_STATS
@@ -733,11 +719,13 @@ static void serialwriteChar(uint8_t data)
 
 static void sendString(const uint8_t *data, int len)
 {
+  setTransmit();
   for (int i = 0; i < len; i++) {
     serialwriteChar(data[i]);
     // for multi-byte writes we add the stop bit delay
     delayMicroseconds(BITTIME);
   }
+  setReceive();
 }
 
 static void receiveBuffer()
@@ -901,7 +889,6 @@ static void test_clock(void)
  */
 static void test_string(void)
 {
-  setTransmit();
   while (1) {
     delayMicroseconds(10000);
     sendString((uint8_t*)"HELLO_WORLD",11);
