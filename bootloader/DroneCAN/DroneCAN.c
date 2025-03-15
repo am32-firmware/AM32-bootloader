@@ -880,6 +880,15 @@ bool DroneCAN_boot_ok(void)
 
   node_status.vendor_specific_status_code = CHECK_FW_OK;
 
+  const uint8_t eeprom_magic = *(uint8_t*)(EEPROM_START_ADD);
+  if (eeprom_magic == 0 || eeprom_magic == 0xff) {
+      can_print("resetting to defaults");
+      save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);
+  }
+  if (eeprom_magic != 0x01) {
+    set_reason(FAIL_REASON_BAD_FIRMWARE_SIGNATURE, "bad eeprom header");
+  }
+
   return true;
 }
 
