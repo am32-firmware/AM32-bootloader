@@ -176,7 +176,11 @@ static bool can_send(const CanardCANFrame *frame)
 
 static void handleTxMailboxInterrupt(uint8_t mailbox_index, bool txok)
 {
+#if 0
+  // in the bootloader we don't do interrupt driven transmit, send
+  // happens from main loop only
   DroneCAN_processTxQueue();
+#endif
 }
 
 static void pollErrorFlagsFromISR()
