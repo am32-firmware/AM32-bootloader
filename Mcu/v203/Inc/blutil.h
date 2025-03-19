@@ -86,18 +86,18 @@ static inline bool gpio_read(uint32_t pin)
   return (input_port->INDR & pin) != 0;
 }
 
-#define BL_TIMER TIM1
+#define BL_TIMER TIM2
 
 /*
   initialise timer for 1us per tick
  */
 static inline void bl_timer_init(void)
 {
-  RCC->APB2PCENR |= RCC_APB2Periph_TIM1;
+  RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
 
   TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
   TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
-  TIM_TimeBaseStructure.TIM_Prescaler = 47;
+  TIM_TimeBaseStructure.TIM_Prescaler = 143;
   TIM_TimeBaseStructure.TIM_Period = 0xFFFF;
   TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
@@ -116,7 +116,7 @@ static inline void bl_timer_init(void)
  */
 static inline void bl_timer_disable(void)
 {
-  RCC->APB2PCENR &= ~RCC_APB2Periph_TIM1;
+  RCC->APB1PCENR &= ~RCC_APB1Periph_TIM2;
 }
 
 static inline uint16_t bl_timer_us(void)
