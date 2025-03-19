@@ -9,7 +9,6 @@
 * Attention: This software (modified or not) and binary are used for
 * microcontroller manufactured by Nanjing Qinheng Microelectronics.
 *******************************************************************************/
-#include "ch32v20x_it.h"
 
 void NMI_Handler(void) __attribute__((interrupt));
 void HardFault_Handler(void) __attribute__((interrupt));
@@ -27,8 +26,7 @@ void HardFault_Handler(void)
   }
 }
 
-//for tenkhz
+// unused systick handler
 void SysTick_Handler(void)
 {
-  SysTick->SR = 0;
 }
