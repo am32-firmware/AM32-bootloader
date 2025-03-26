@@ -176,6 +176,12 @@ typedef void (*pFunction)(void);
  */
 #define ADDRESS_MAGIC_EEPROM 0x20
 
+// magic address for FILE_NAME
+#define ADDRESS_MAGIC_FILE_NAME 0x21
+
+// magic address for continue transfer from last read
+#define ADDRESS_MAGIC_CONTINUE 0x22
+
 
 #define CMD_RUN             0x00
 #define CMD_PROG_FLASH      0x01
@@ -203,6 +209,7 @@ static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static char rxbyte;
 static uint32_t address;
+static uint32_t continue_address;
 
 typedef union __attribute__ ((packed))
 {
@@ -479,16 +486,23 @@ static void decodeInput()
       check for magic addresses that map to specific areas
     */
     if (address == ADDRESS_MAGIC_EEPROM) {
-        // config app has requested access to the eeprom region
-        address = EEPROM_START_ADD;
+      // config app has requested access to the eeprom region
+      address = EEPROM_START_ADD;
+    } else if (address == ADDRESS_MAGIC_FILE_NAME) {
+      // config app has requested access to the FILE_NAME. Assume eeprom-32 for now,
+      // this may change for some MCUs in the future
+      address = EEPROM_START_ADD - 32;
+    } else if (address == ADDRESS_MAGIC_CONTINUE) {
+      // allow easy continue from last address, for breaking up eeprom into multiple small reads
+      address = continue_address;
     } else if (address < 1024) {
-        // other addresses below 1024 are reserved for future magic values
-        send_BAD_ACK();
-        return;
+      // other addresses below 1024 are reserved for future magic values
+      send_BAD_ACK();
+      return;
     } else {
-        // cope with ADDRESS_SHIFT for 128k flash boards, and add
-        // in MCU base flash address
-        address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
+      // cope with ADDRESS_SHIFT for 128k flash boards, and add
+      // in MCU base flash address
+      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
     }
 
     send_ACK();
@@ -561,6 +575,12 @@ static void decodeInput()
       return;
     }
 
+    if (address == 0) {
+      // must send SET_ADDRESS first
+      send_BAD_ACK();
+      return;
+    }
+
     count++;
     uint16_t out_buffer_size = rxBuffer[1];//
     if (out_buffer_size == 0) {
@@ -578,6 +598,12 @@ static void decodeInput()
     read_data[out_buffer_size + 1] = crc>>8;
     read_data[out_buffer_size + 2] = 0x30;
     sendString(read_data, out_buffer_size+3);
+
+    // allow the client to continue to the next address with ADDRESS_MAGIC_CONTINUE
+    continue_address = address + out_buffer_size;
+
+    // ensure client sends a SET_ADDRESS each time
+    address = 0;
 
     return;
   }
