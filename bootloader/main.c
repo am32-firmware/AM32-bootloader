@@ -197,17 +197,14 @@ typedef void (*pFunction)(void);
 #define CMD_SET_ADDRESS     0xFF
 #define CMD_SET_BUFFER      0xFE
 
-static uint16_t low_pin_count;
 static char receiveByte;
-static int count;
-static char messagereceived;
-static uint16_t address_expected_increment;
+static bool messagereceived;
 static int cmd;
 static int received;
 
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
-static char rxbyte;
+static uint8_t rxbyte;
 static uint32_t address;
 static uint32_t continue_address;
 
@@ -527,7 +524,6 @@ static void decodeInput()
       payload_buffer_size = rxBuffer[3];
     }
     incoming_payload_no_command = 1;
-    address_expected_increment = 256;
     setReceive();
 
     return;
@@ -581,12 +577,10 @@ static void decodeInput()
       return;
     }
 
-    count++;
     uint16_t out_buffer_size = rxBuffer[1];//
     if (out_buffer_size == 0) {
       out_buffer_size = 256;
     }
-    address_expected_increment = 128;
 
     uint8_t read_data[out_buffer_size + 3];        // make buffer 3 larger to fit CRC and ACK
     memset(read_data, 0, sizeof(read_data));
@@ -702,7 +696,7 @@ static bool serialreadChar()
   }
 
   // we got a good byte
-  messagereceived = 1;
+  messagereceived = true;
   receiveByte = rxbyte;
 #ifdef SERIAL_STATS
   stats.good++;
@@ -756,8 +750,8 @@ static void sendString(const uint8_t *data, int len)
 
 static void receiveBuffer()
 {
-  count = 0;
-  messagereceived = 0;
+  uint16_t count = 0;
+  messagereceived = false;
   memset(rxBuffer, 0, sizeof(rxBuffer));
 
   setReceive();
@@ -768,7 +762,7 @@ static void receiveBuffer()
     }
 
     if (incoming_payload_no_command) {
-      if (count == payload_buffer_size+2) {
+      if (count == payload_buffer_size+2U) {
         break;
       }
       rxBuffer[i] = rxbyte;
@@ -832,6 +826,8 @@ static void update_EEPROM()
 #define pull_down_pin_count_interations 4000		// greater interations extend grace period for input devices booting with signal pin high
 static void checkForSignal()
 {
+  uint16_t low_pin_count = 0;
+
   gpio_mode_set_input(input_pin, GPIO_PULL_DOWN);
 
   delayMicroseconds(500);
