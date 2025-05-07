@@ -865,7 +865,8 @@ static void checkForSignal()
     delayMicroseconds(10);
   }
   if (low_pin_count == 0) {
-    return;		// pulled high & never low in history - stay in bootloader only
+//    return;		// pulled high & never low in history - stay in bootloader only
+    jump();	
   }
 
   low_pin_count = 0;
