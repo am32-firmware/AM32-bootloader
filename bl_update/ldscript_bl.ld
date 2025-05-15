@@ -123,6 +123,13 @@ SECTIONS
     . = ALIGN(8);
   } >RAM
 
+  /* Ensure flash content is padded to 32 bytes with 0xFF */
+  .padding :
+  {
+    . = ALIGN(32);
+    BYTE(0xFF); . = ALIGN(32);
+  } >FLASH
+
   /* Remove information from the standard libraries */
   /DISCARD/ :
   {
