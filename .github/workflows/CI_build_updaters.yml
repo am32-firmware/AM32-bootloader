@@ -20,7 +20,7 @@ jobs:
           name: AM32-bootloader-updaters-hex
           path: |
             obj/*_BL_UPDATER_*.hex
-          retention-days: 7
+          retention-days: 60
 
       - name: Archive build amj
         uses: actions/upload-artifact@v4
@@ -28,4 +28,4 @@ jobs:
           name: AM32-bootloader-updaters-amj
           path: |
             obj/*_BL_UPDATER_*.amj
-          retention-days: 7
+          retention-days: 60
