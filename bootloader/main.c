@@ -201,7 +201,7 @@ static char receiveByte;
 static bool messagereceived;
 static int cmd;
 static int received;
-
+static bool initialized;
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static uint8_t rxbyte;
@@ -342,7 +342,11 @@ static void setTransmit()
   gpio_mode_set_output(input_pin, GPIO_OUTPUT_PUSH_PULL);
 
   // delay a bit to let the sender get setup for receiving
-  delayMicroseconds(BITTIME);
+  // only delay if device info has been sent, this prevents
+  // an issue with iNAV
+  if (initialized){
+    delayMicroseconds(BITTIME);
+  }
 }
 
 static void serialwriteOneChar(uint8_t c)
@@ -373,6 +377,7 @@ static void send_BAD_CRC_ACK()
 static void sendDeviceInfo()
 {
   sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
+  initialized = true;
 }
 
 static bool checkAddressWritable(uint32_t address)
@@ -947,6 +952,7 @@ int main(void)
 {
   bl_clock_config();
   bl_timer_init();
+  delayMicroseconds(50000);
   bl_gpio_init();
 
 #ifdef BOOTLOADER_TEST_CLOCK
@@ -961,7 +967,7 @@ int main(void)
 
   checkForSignal();
 
-  gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
+  gpio_mode_set_input(input_pin, GPIO_PULL_UP);
 
 #ifdef USE_ADC_INPUT  // go right to application
   jump();
