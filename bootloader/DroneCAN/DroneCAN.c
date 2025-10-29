@@ -32,6 +32,10 @@
 #define DRONECAN_DEBUG 0
 #endif
 
+#ifndef DRONECAN_CHECK_SIGNATURE
+#define DRONECAN_CHECK_SIGNATURE 1
+#endif
+
 // assume that main fw starts at 16k
 #define MAIN_FW_START_ADDR 0x08004000
 
@@ -147,6 +151,7 @@ static const uint8_t default_settings[] = {
   0x80, 0x80, 0x80, 0x32, 0x00, 0x32, 0x00, 0x00, 0x0f, 0x0a, 0x0a, 0x8d, 0x66, 0x06, 0x00, 0x00
 };
 
+#if DRONECAN_CHECK_SIGNATURE
 // crc32 implementation, slow method for small flash cost
 static uint32_t crc32(const uint8_t *buf, uint32_t size)
 {
@@ -162,6 +167,7 @@ static uint32_t crc32(const uint8_t *buf, uint32_t size)
   }
   return crc;
 }
+#endif
 
 // print to CAN LogMessage for debugging
 static void can_print(const char *s)
@@ -864,6 +870,8 @@ bool DroneCAN_boot_ok(void)
     set_reason(FAIL_REASON_BAD_BOARD_ID, "bad board type");
     return false;
   }
+
+#if DRONECAN_CHECK_SIGNATURE
   const uint8_t *appsigend = (const uint8_t *)(appsig+1);
   const uint32_t crc1 = crc32(fw_base, (uint32_t)((uint8_t*)appsig - fw_base));
   const uint32_t crc2 = crc32(appsigend, appsig->fwlen - (uint32_t)(appsigend - fw_base));
@@ -872,6 +880,7 @@ bool DroneCAN_boot_ok(void)
     set_reason(FAIL_REASON_BAD_CRC, "bad firmware CRC");
     return false;
   }
+#endif
 
   if (!have_raw_command) {
     set_reason(FAIL_REASON_BAD_CRC, "no signal");

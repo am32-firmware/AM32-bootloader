@@ -17,7 +17,9 @@
 /*
   we have up to 512k of flash, but only use 64k for now
  */
+#ifndef BOARD_FLASH_SIZE
 #define BOARD_FLASH_SIZE 64
+#endif
 
 #define GPIO_PIN(n) (1U<<(n))
 
@@ -27,6 +29,7 @@
 
 #define GPIO_OUTPUT_PUSH_PULL LL_GPIO_OUTPUT_PUSHPULL
 
+#ifdef PORT_LETTER
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
   LL_GPIO_SetPinMode(input_port, pin, LL_GPIO_MODE_INPUT);
@@ -53,6 +56,7 @@ static inline bool gpio_read(uint32_t pin)
 {
   return LL_GPIO_IsInputPinSet(input_port, pin);
 }
+#endif // PORT_LETTER
 
 #define BL_TIMER TIM2
 
@@ -103,27 +107,60 @@ static inline void bl_clock_config(void)
   LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
   while (LL_PWR_IsActiveFlag_VOS() != 0) ;
 
+#ifdef USE_HSE
+  // setup to use HSE
+#if defined(USE_HSE_BYPASS) && (USE_HSE_BYPASS == 0)
+  LL_RCC_HSE_DisableBypass(); // Use crystal mode
+#else
+  LL_RCC_HSE_EnableBypass(); // Default: Use external oscillator
+#endif
+  LL_RCC_HSE_Enable();
+  while (LL_RCC_HSE_IsReady() != 1) ;
+  #define PLL_SRC LL_RCC_PLLSOURCE_HSE
+#if HSE_VALUE == 8000000
+  #define PLLM_DIV LL_RCC_PLLM_DIV_1
+#elif HSE_VALUE == 16000000
+  #define PLLM_DIV LL_RCC_PLLM_DIV_2
+#elif HSE_VALUE == 24000000
+  #define PLLM_DIV LL_RCC_PLLM_DIV_3
+#else
+  #error "Unsupported HSE_VALUE"
+#endif
+#else // default to HSI (16MHz)
   LL_RCC_HSI_Enable();
-
-  /* Wait till HSI is ready */
   while (LL_RCC_HSI_IsReady() != 1) ;
-
-  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSI, LL_RCC_PLLM_DIV_2, 40, LL_RCC_PLLR_DIV_2);
-  LL_RCC_PLL_EnableDomain_SYS();
-  LL_RCC_PLL_Enable();
-
-  /* Wait till PLL is ready */
-  while (LL_RCC_PLL_IsReady() != 1) ;
-  LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_PLL);
-
-  /* Wait till System clock is ready */
-  while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_PLL) ;
+  #define PLLM_DIV LL_RCC_PLLM_DIV_2
+  #define PLL_SRC LL_RCC_PLLSOURCE_HSI
+#endif
 
   LL_RCC_SetAHBPrescaler(LL_RCC_SYSCLK_DIV_1);
   LL_RCC_SetAPB1Prescaler(LL_RCC_APB1_DIV_1);
   LL_RCC_SetAPB2Prescaler(LL_RCC_APB2_DIV_1);
+
+  LL_RCC_PLL_ConfigDomain_SYS(PLL_SRC, PLLM_DIV, 40, LL_RCC_PLLR_DIV_2);
+  LL_RCC_PLL_EnableDomain_SYS();
+
+#if DRONECAN_SUPPORT
+  LL_RCC_SetFDCANClockSource(LL_RCC_FDCAN_CLKSOURCE_PLL);
+  LL_RCC_PLL_EnableDomain_48M();
+  MODIFY_REG(RCC->PLLCFGR, RCC_PLLCFGR_PLLQ, LL_RCC_PLLQ_DIV_4);
+
+  // also enable the backup domain registers in TAMP for communication
+  // between bootloader and main firmware
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+  PWR->CR1 |= PWR_CR1_DBP;
+  LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_NONE);
+  RCC->BDCR |= RCC_BDCR_RTCEN;
+#endif
+
+  LL_RCC_PLL_Enable();
+  while (LL_RCC_PLL_IsReady() != 1) ;
+
+  LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_PLL);
+  while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_PLL) ;
 }
 
+#ifdef PORT_LETTER
 static inline void bl_gpio_init(void)
 {
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -180,3 +217,4 @@ static inline void jump_to_application(void)
 void SystemInit()
 {
 }
+#endif // PORT_LETTER
