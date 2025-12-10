@@ -95,20 +95,15 @@ static inline void bl_timer_init(void)
 {
   RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
 
-  TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-  TIM_TimeBaseStructInit(&TIM_TimeBaseStructure);
-  TIM_TimeBaseStructure.TIM_Prescaler = 143;
-  TIM_TimeBaseStructure.TIM_Period = 0xFFFF;
-  TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM_TimeBaseInit(BL_TIMER, &TIM_TimeBaseStructure);
-  TIM_SetCounter(BL_TIMER, 0);
+  // direct register access to avoid pulling in TIM_TimeBaseInit (saves ~150 bytes)
+  BL_TIMER->PSC = 143;         // prescaler for 1us at 144MHz
+  BL_TIMER->ATRLR = 0xFFFF;    // period
+  BL_TIMER->CTLR1 = 0;         // up counter, no clock division
+  BL_TIMER->CNT = 0;           // reset counter
+  BL_TIMER->SWEVGR = TIM_PSCReloadMode_Immediate;
 
-  // enable preload
-  BL_TIMER->CTLR1 |= TIM_ARPE;
-
-  // enable timer
-  BL_TIMER->CTLR1 |= TIM_CEN;
+  // enable preload and timer
+  BL_TIMER->CTLR1 |= TIM_ARPE | TIM_CEN;
 }
 
 /*
@@ -134,15 +129,11 @@ static inline void bl_clock_config(void)
 
 static inline void bl_gpio_init(void)
 {
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE );
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE );
+  // enable GPIO clocks via direct register access (avoids RCC_APB2PeriphClockCmd)
+  RCC->APB2PCENR |= RCC_APB2Periph_GPIOA | RCC_APB2Periph_GPIOB;
 
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_StructInit(&GPIO_InitStruct);
-  GPIO_InitStruct.GPIO_Pin   = input_pin;
-  GPIO_InitStruct.GPIO_Mode  = GPIO_Mode_IN_FLOATING;
-  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
-  GPIO_Init(input_port, &GPIO_InitStruct);
+  // use our own gpio_mode_set_input instead of GPIO_Init (saves ~250 bytes)
+  gpio_mode_set_input(input_pin, GPIO_PULL_NONE);
 }
 
 /*
