@@ -62,7 +62,7 @@
 #endif
 
 #ifndef FIRMWARE_RELATIVE_START
-#if DRONECAN_SUPPORT
+#if defined(DRONECAN_SUPPORT) || defined(MCXA153)
 #define FIRMWARE_RELATIVE_START 0x4000
 #else
 #define FIRMWARE_RELATIVE_START 0x1000
@@ -98,6 +98,11 @@
 #define input_port        GPIOA
 #define PIN_NUMBER        0
 #define PORT_LETTER       0
+#elif defined(USE_PB2)
+#define input_pin         GPIO_PIN(2)
+#define input_port        GPIOB
+#define PIN_NUMBER        2
+#define PORT_LETTER       1
 #else
 #error "Bootloader comms pin not defined"
 #endif
@@ -120,6 +125,26 @@ static uint16_t invalid_command;
 /*
   currently only support 32, 64 or 128 k flash
  */
+#ifdef NXP
+#ifndef FLASH_SECTOR_SIZE
+#error "must define FLASH_SECTOR_SIZE"
+#endif
+
+#if BOARD_FLASH_SIZE == 64
+#define EEPROM_START_ADD (0x10000 - FLASH_SECTOR_SIZE)
+#define FLASH_SIZE_CODE 0x15
+#define ADDRESS_SHIFT 0
+
+#elif BOARD_FLASH_SIZE == 128
+#define EEPROM_START_ADD (0x20000 - FLASH_SECTOR_SIZE)
+//#define FLASH_SIZE_CODE 0x2B
+#define FLASH_SIZE_CODE 0x16
+#define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
+#else
+#error "unsupported BOARD_FLASH_SIZE"
+#endif
+
+#else
 #if BOARD_FLASH_SIZE == 32
 #define EEPROM_START_ADD (MCU_FLASH_START+0x7c00)
 #define FLASH_SIZE_CODE 0x1f
@@ -136,6 +161,8 @@ static uint16_t invalid_command;
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
 #else
 #error "unsupported BOARD_FLASH_SIZE"
+#endif
+
 #endif
 
 /*
@@ -255,7 +282,13 @@ static void jump()
 {
 #ifndef DISABLE_JUMP
 #if CHECK_EEPROM_BEFORE_JUMP
+#ifdef NXP
+  uint8_t eeprom[EEPROM_MAX_SIZE];
+  read_flash_bin(eeprom, EEPROM_START_ADD, EEPROM_MAX_SIZE);
+  uint8_t value = eeprom[0];
+#else
   uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
+#endif
   if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
     invalid_command = 0;
     return;
@@ -389,6 +422,7 @@ static void decodeInput()
 {
   if (incoming_payload_no_command) {
     len = payload_buffer_size;
+
     if (checkCrc(rxBuffer,len)) {
       memset(payLoadBuffer, 0, sizeof(payLoadBuffer));             // reset buffer
 
@@ -397,6 +431,7 @@ static void decodeInput()
       }
       send_ACK();
       incoming_payload_no_command = 0;
+
       return;
     } else {
       send_BAD_CRC_ACK();
@@ -472,6 +507,7 @@ static void decodeInput()
   }
 
   if (cmd == CMD_SET_ADDRESS) {
+
     // command set addressinput format is: CMD, 00 , High byte
     // address, Low byte address, crclb ,crchb
     len = 4;  // package without 2 byte crc
@@ -535,6 +571,7 @@ static void decodeInput()
   }
 
   if (cmd == CMD_KEEP_ALIVE) {
+
     len = 2;
     if (!checkCrc((uint8_t*)rxBuffer, len)) {
       send_BAD_CRC_ACK();
@@ -543,7 +580,6 @@ static void decodeInput()
     }
 
     serialwriteOneChar(0xC1);                // bad command message.
-
     return;
   }
 
@@ -566,6 +602,7 @@ static void decodeInput()
   }
 
   if (cmd == CMD_READ_FLASH_SIL) {
+
     // for sending contents of flash memory at the memory location set in
     // bootloader.c need to still set memory with data from set mem
     // command
@@ -770,6 +807,7 @@ static void receiveBuffer()
       if (count == payload_buffer_size+2U) {
         break;
       }
+
       rxBuffer[i] = rxbyte;
       count++;
     } else {
@@ -802,7 +840,12 @@ static void update_EEPROM()
     // of a brownout or spark causing a eeprom write that corrupts the settings
     return;
   }
+#ifdef NXP
+  uint8_t eeprom[EEPROM_MAX_SIZE];
+  read_flash_bin(eeprom, EEPROM_START_ADD, EEPROM_MAX_SIZE);
+#else
   const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+#endif
   if (BOOTLOADER_VERSION != eeprom[2]) {
     if (eeprom[2] == 0xFF || eeprom[2] == 0x00) {
       return;
@@ -810,9 +853,14 @@ static void update_EEPROM()
 
     // update only the bootloader version, preserve all other bytes up to EEPROM_MAX_SIZE
     uint8_t data[EEPROM_MAX_SIZE];
-    memcpy(data, eeprom, EEPROM_MAX_SIZE);
-    data[2] = BOOTLOADER_VERSION;
+	memcpy(data, eeprom, EEPROM_MAX_SIZE);
+	data[2] = BOOTLOADER_VERSION;
 
+#ifdef NXP
+    uint8_t *p = &data[0];
+
+    save_flash_nolib(p, EEPROM_MAX_SIZE, EEPROM_START_ADD);
+#else
     // flash in 256 byte chunks as save_flash_nolib may not support larger chunks
     uint32_t remaining = EEPROM_MAX_SIZE;
     uint32_t addr = EEPROM_START_ADD;
@@ -825,6 +873,7 @@ static void update_EEPROM()
       addr += chunk;
       remaining -= chunk;
     }
+#endif
   }
 }
 #endif // UPDATE_EEPROM_ENABLE
@@ -901,6 +950,7 @@ static void checkForSignal()
 static void test_clock(void)
 {
   setTransmit();
+
   while (1) {
     gpio_clear(input_pin);
     bl_timer_reset();
@@ -980,6 +1030,7 @@ int main(void)
 
   while (1) {
     receiveBuffer();
+
     if (invalid_command > 100) {
       jump();
     }

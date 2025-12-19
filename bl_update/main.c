@@ -15,17 +15,26 @@
 
 #include <string.h>
 
+#if defined(MCXA153)
+#define GPIO_PORT_TYPE PORT_Type*
+#else
 #define GPIO_PORT_TYPE typeof(GPIOA)
+#endif
 
 // dummy pin and port so we can re-use blutil.h
 static GPIO_PORT_TYPE input_port;
 static uint32_t input_pin;
 
+#ifndef MCU_FLASH_START
 #define MCU_FLASH_START 0x08000000
-
+#endif
 
 #if !DRONECAN_SUPPORT
+#ifdef MCXA153
+#define FIRMWARE_RELATIVE_START 0x4000
+#else
 #define FIRMWARE_RELATIVE_START 0x1000
+#endif // MCXA153
 #else
 
 #define FIRMWARE_RELATIVE_START 0x4000
