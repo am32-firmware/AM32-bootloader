@@ -74,8 +74,8 @@
 #endif
 
 #ifdef USE_PA2
-#define input_pin        GPIO_PIN(2)
-#define input_port       GPIOA
+#define input_pin        2
+#define input_port       GPIO0
 #define PIN_NUMBER       2
 #define PORT_LETTER      0
 #elif defined(USE_PB4)
