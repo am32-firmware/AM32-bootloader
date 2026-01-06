@@ -98,6 +98,12 @@
 #define input_port        GPIOA
 #define PIN_NUMBER        0
 #define PORT_LETTER       0
+#elif defined(USE_P1_2)
+#define input_pin 		2
+#define input_port 		PORT1
+#define input_GPIO 		GPIO1
+#define PIN_NUMBER    	2
+#define PORT_LETTER   	1
 #else
 #error "Bootloader comms pin not defined"
 #endif
@@ -120,6 +126,26 @@ static uint16_t invalid_command;
 /*
   currently only support 32, 64 or 128 k flash
  */
+#ifdef NXP
+#if BOARD_FLASH_SIZE == 32
+#define EEPROM_START_ADD (MCU_FLASH_START + 0x8000 - EEPROM_MAX_SIZE)
+#define FLASH_SIZE_CODE 0x1f
+#define ADDRESS_SHIFT 0
+
+#elif BOARD_FLASH_SIZE == 64
+#define EEPROM_START_ADD (MCU_FLASH_START + 0x10000 - EEPROM_MAX_SIZE)
+#define FLASH_SIZE_CODE 0x35
+#define ADDRESS_SHIFT 0
+
+#elif BOARD_FLASH_SIZE == 128
+#define EEPROM_START_ADD (MCU_FLASH_START + 0x20000 - EEPROM_MAX_SIZE)
+#define FLASH_SIZE_CODE 0x2B
+#define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
+#else
+#error "unsupported BOARD_FLASH_SIZE"
+#endif
+
+#else
 #if BOARD_FLASH_SIZE == 32
 #define EEPROM_START_ADD (MCU_FLASH_START+0x7c00)
 #define FLASH_SIZE_CODE 0x1f
@@ -136,6 +162,8 @@ static uint16_t invalid_command;
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
 #else
 #error "unsupported BOARD_FLASH_SIZE"
+#endif
+
 #endif
 
 /*
@@ -813,6 +841,11 @@ static void update_EEPROM()
     memcpy(data, eeprom, EEPROM_MAX_SIZE);
     data[2] = BOOTLOADER_VERSION;
 
+//#ifdef NXP
+//    uint8_t *p = &data[0];
+//
+//    save_flash_nolib(p, EEPROM_MAX_SIZE, EEPROM_START_ADD);
+//#else
     // flash in 256 byte chunks as save_flash_nolib may not support larger chunks
     uint32_t remaining = EEPROM_MAX_SIZE;
     uint32_t addr = EEPROM_START_ADD;
@@ -825,6 +858,7 @@ static void update_EEPROM()
       addr += chunk;
       remaining -= chunk;
     }
+//#endif
   }
 }
 #endif // UPDATE_EEPROM_ENABLE
@@ -980,9 +1014,13 @@ int main(void)
 
   while (1) {
     receiveBuffer();
-    if (invalid_command > 100) {
-      jump();
-    }
+
+	jump_to_application();
+
+//
+//    if (invalid_command > 100) {
+//      jump();
+//    }
 #if DRONECAN_SUPPORT
     if (DroneCAN_update()) {
       jump();

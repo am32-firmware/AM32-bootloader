@@ -12,8 +12,9 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-	PROGRAM_FLASH	(rx)   	: ORIGIN = 0x0, LENGTH = 0x4000 - 32	/* 8K bytes for bootloader */
+	PROGRAM_FLASH	(rx)   	: ORIGIN = 0x0, LENGTH = 0x4000 - 32	/* 16K bytes for bootloader */
 	DEVINFO 		(r) 	: ORIGIN = ORIGIN(PROGRAM_FLASH) + LENGTH(PROGRAM_FLASH), LENGTH = 32 
+	EEPROM			(rx)	: ORIGIN = 0x20000 - 0x2000, LENGTH = 0x2000
   	SRAM 			(rwx)	: ORIGIN = 0x20000000, LENGTH = 0x6000 /* 24K bytes (alias RAM) */  
   	SRAMX0 			(rwx) 	: ORIGIN = 0x4000000, LENGTH = 0x2000 /* 8K bytes (alias RAM2) */  
   	SRAMX1 			(rwx) 	: ORIGIN = 0x4002000, LENGTH = 0x1000 /* 4K bytes (alias RAM3) */  
