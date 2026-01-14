@@ -288,7 +288,13 @@ static void jump()
 {
 #ifndef DISABLE_JUMP
 #if CHECK_EEPROM_BEFORE_JUMP
+#ifdef NXP
+  uint8_t eeprom[EEPROM_MAX_SIZE];
+  read_flash_bin(eeprom, EEPROM_START_ADD, EEPROM_MAX_SIZE);
+  uint8_t value = eeprom[0];
+#else
   uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
+#endif
   if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
     invalid_command = 0;
     return;
@@ -842,7 +848,12 @@ static void update_EEPROM()
     // of a brownout or spark causing a eeprom write that corrupts the settings
     return;
   }
+#ifdef NXP
+  uint8_t eeprom[EEPROM_MAX_SIZE];
+  read_flash_bin(eeprom, EEPROM_START_ADD, EEPROM_MAX_SIZE);
+#else
   const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+#endif
   if (BOOTLOADER_VERSION != eeprom[2]) {
     if (eeprom[2] == 0xFF || eeprom[2] == 0x00) {
       return;
