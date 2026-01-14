@@ -11,21 +11,15 @@
 
 #include "main.h"
 
-//#define NXP
+#define NXP
 
-/*
-  8k ram
- */
+// Use 24k ram
 #define RAM_BASE 0x20000000
-#define RAM_SIZE 8*1024
+#define RAM_SIZE 0x6000
 
-/*
-  use 128k of flash
- */
-//#define BOARD_FLASH_SIZE 128
-#define BOARD_FLASH_SIZE 32
-
-//#define GPIO_PIN(n) (1U<<(n))
+// Use 128k of flash
+#define BOARD_FLASH_SIZE 128
+//#define BOARD_FLASH_SIZE 64
 
 #define GPIO_PULL_NONE 2
 #define GPIO_PULL_UP   1
@@ -35,21 +29,19 @@
 
 flash_config_t s_flashDriver;
 
-//uint32_t SystemCoreClock = 8000000U;
-
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)
 {
 	//Check if pull-up/down should be turned off
 	if (pull_up_down == GPIO_PULL_NONE) {
 		//Disable pull-up/down and set to GPIO
 		modifyReg32(&input_port->PCR[pin],
-				PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
-				PORT_PCR_MUX(0) | PORT_PCR_PE(0) | PORT_PCR_PS(0));
+				PORT_PCR_IBE_MASK | PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
+				PORT_PCR_IBE(1) | PORT_PCR_MUX(0) | PORT_PCR_PE(0) | PORT_PCR_PS(0));
 	} else {
 		//Enable on pull-up/down and set to GPIO
 		modifyReg32(&input_port->PCR[pin],
-				PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
-				PORT_PCR_MUX(0) | PORT_PCR_PE(1) | PORT_PCR_PS(pull_up_down));
+				PORT_PCR_IBE_MASK | PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
+				PORT_PCR_IBE(1) | PORT_PCR_MUX(0) | PORT_PCR_PE(1) | PORT_PCR_PS(pull_up_down));
 	}
 
 	//Set to input
@@ -60,7 +52,7 @@ static inline void gpio_mode_set_output(uint32_t pin, uint32_t output_mode)
 {
 	//Disable pull-up/down and set to GPIO
 	modifyReg32(&input_port->PCR[pin],
-			PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
+			PORT_PCR_IBE_MASK | PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
 			PORT_PCR_MUX(0) | PORT_PCR_PE(0) | PORT_PCR_PS(0));
 
 	//Set to output
@@ -70,13 +62,15 @@ static inline void gpio_mode_set_output(uint32_t pin, uint32_t output_mode)
 static inline void gpio_set(uint32_t pin)
 {
 	//Set output to HIGH
-	modifyReg32(&input_GPIO->PSOR, 0, (1 << pin));
+//	modifyReg32(&input_GPIO->PSOR, 0, (1 << pin));
+	input_GPIO->PSOR = (1 << pin);
 }
 
 static inline void gpio_clear(uint32_t pin)
 {
 	//Set output to LOW
-	modifyReg32(&input_GPIO->PCOR, 0, (1 << pin));
+//	modifyReg32(&input_GPIO->PCOR, 0, (1 << pin));
+	input_GPIO->PCOR = (1 << pin);
 }
 
 static inline bool gpio_read(uint32_t pin)
@@ -112,8 +106,12 @@ static inline void bl_timer_init(void)
 	//Freeze clock configuration registers access
 	modifyReg32(&SYSCON->CLKUNLOCK, 0, SYSCON_CLKUNLOCK_UNLOCK(1));
 
-	//Set CTIMER2 prescaler to /6, so clock ticks at 1MHz
-	CTIMER2->PR = 5;
+	//Set CTIMER2 prescaler to /12, so clock ticks at 1MHz
+	CTIMER2->PR = 11;
+
+	//Set Match0 register to reset timer at 16-bit
+//	modifyReg32(&CTIMER2->MCR, 0, CTIMER_MCR_MR0R(1));
+//	CTIMER2->MR[0] = 0xffff;	//16-bit
 
 	//Enable CTIMER2
 	modifyReg32(&CTIMER2->TCR, CTIMER_TCR_CEN_MASK, CTIMER_TCR_CEN(1));
@@ -126,6 +124,21 @@ static inline void bl_timer_disable(void)
 {
 	//Disable CTIMER2
 	modifyReg32(&CTIMER2->TCR, CTIMER_TCR_CEN_MASK, CTIMER_TCR_CEN(0));
+
+//	//Unlock clock configuration registers access
+//	modifyReg32(&SYSCON->CLKUNLOCK, SYSCON_CLKUNLOCK_UNLOCK(1), 0);
+//
+//	//Halt CTIMER2 timer
+//	modifyReg32(&MRCC0->MRCC_CTIMER2_CLKDIV, 0, MRCC_MRCC_CTIMER2_CLKDIV_HALT(1));
+//
+//	//Reset peripheral
+//	modifyReg32(&MRCC0->MRCC_GLB_RST0, MRCC_MRCC_GLB_RST0_CTIMER2_MASK, 0);
+//
+//	//Disable peripheral clocks
+//	modifyReg32(&MRCC0->MRCC_GLB_CC0, MRCC_MRCC_GLB_CC0_CTIMER2_MASK, 0);
+//
+//	//Freeze clock configuration registers access
+//	modifyReg32(&SYSCON->CLKUNLOCK, 0, SYSCON_CLKUNLOCK_UNLOCK(1));
 }
 
 static inline uint16_t bl_timer_us(void)
@@ -187,6 +200,9 @@ static inline void System_Init(void)
 	if (status) {
 		__asm volatile ("nop");
 	}
+
+	//Enable cache function
+	modifyReg32(&SYSCON->LPCAC_CTRL, SYSCON_LPCAC_CTRL_DIS_LPCAC(1), 0);
 }
 
 /*
@@ -345,11 +361,11 @@ static inline void bl_gpio_init(void)
 	modifyReg32(&SYSCON->CLKUNLOCK, 0, SYSCON_CLKUNLOCK_UNLOCK(1));
 
 	//Enable GPIO pins for testing/debugging. P3.27, P2.17, P3.28. Set them to output
-//	modifyReg32(&PORT3->PCR[27],	//ENC_A
-//			PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
-//			PORT_PCR_MUX(0) | PORT_PCR_PE(1) | PORT_PCR_PS(0));
-//	modifyReg32(&GPIO3->PDDR, 0, (1 << 27));
-//	GPIO3->PCOR = (1 << 27);
+	modifyReg32(&PORT3->PCR[27],	//ENC_A
+			PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
+			PORT_PCR_MUX(0) | PORT_PCR_PE(1) | PORT_PCR_PS(0));
+	modifyReg32(&GPIO3->PDDR, 0, (1 << 27));
+	GPIO3->PCOR = (1 << 27);
 
 	//pin 12, 13 and 14 cannot be used as these are occupied by USB FS on the MCXA14x and MCXA15x
 //	modifyReg32(&PORT2->PCR[17],	//ENC_B
@@ -358,11 +374,11 @@ static inline void bl_gpio_init(void)
 //	modifyReg32(&GPIO2->PDDR, 0, (1 << 17));
 //	GPIO2->PCOR = (1 << 17);
 
-//	modifyReg32(&PORT3->PCR[28],	//ENC_I
-//			PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
-//			PORT_PCR_MUX(0) | PORT_PCR_PE(1) | PORT_PCR_PS(0));
-//	modifyReg32(&GPIO3->PDDR, 0, (1 << 28));
-//	GPIO3->PCOR = (1 << 28);
+	modifyReg32(&PORT3->PCR[28],	//ENC_I
+			PORT_PCR_MUX_MASK | PORT_PCR_PE_MASK | PORT_PCR_PS_MASK,
+			PORT_PCR_MUX(0) | PORT_PCR_PE(1) | PORT_PCR_PS(0));
+	modifyReg32(&GPIO3->PDDR, 0, (1 << 28));
+	GPIO3->PCOR = (1 << 28);
 }
 
 /*
@@ -370,8 +386,8 @@ static inline void bl_gpio_init(void)
  */
 static inline bool bl_was_software_reset(void)
 {
-//	return (CMC->SRS & CMC_SRS_SW_MASK);
-	return 0;
+	return ((CMC->SRS & CMC_SRS_SW_MASK) >> CMC_SRS_SW_SHIFT);
+//	return 1;
 }
 
 /*

@@ -22,7 +22,8 @@ CFLAGS_$(MCU) += \
 	 -DCPU_MCXA153VLH \
 	 -DMCU_FLASH_START=0x0 \
 	 -DFIRMWARE_RELATIVE_START=0x4000 \
-	 -DEEPROM_MAX_SIZE=0x2000 \
+	 -DEEPROM_MAX_SIZE=0x180 \
+	 -DFLASH_SECTOR_SIZE=0x2000
 
 SRC_$(MCU)_BL := $(foreach dir,$(SRC_BASE_DIR_$(MCU)),$(wildcard $(dir)/*.[cs])) \
 	$(wildcard $(HAL_FOLDER_$(MCU))/Src/*.c)
