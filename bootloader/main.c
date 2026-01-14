@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-//#pragma GCC optimize("O0")
+#pragma GCC optimize("O0")
 
 #include <eeprom.h>
 
@@ -122,24 +122,31 @@ static uint16_t invalid_command;
 #endif
 
 #define PIN_CODE (PORT_LETTER << 4 | PIN_NUMBER)
+//#define PIN_CODE 0x2
 
 /*
   currently only support 32, 64 or 128 k flash
  */
 #ifdef NXP
+#ifndef FLASH_SECTOR_SIZE
+#error "must define FLASH_SECTOR_SIZE"
+#endif
+
 #if BOARD_FLASH_SIZE == 32
-#define EEPROM_START_ADD (MCU_FLASH_START + 0x8000 - EEPROM_MAX_SIZE)
+#define EEPROM_START_ADD (0x8000 - FLASH_SECTOR_SIZE)
 #define FLASH_SIZE_CODE 0x1f
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 64
-#define EEPROM_START_ADD (MCU_FLASH_START + 0x10000 - EEPROM_MAX_SIZE)
+#define EEPROM_START_ADD (0x10000 - FLASH_SECTOR_SIZE)
 #define FLASH_SIZE_CODE 0x35
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 128
-#define EEPROM_START_ADD (MCU_FLASH_START + 0x20000 - EEPROM_MAX_SIZE)
-#define FLASH_SIZE_CODE 0x2B
+#define EEPROM_START_ADD (0x20000 - FLASH_SECTOR_SIZE)
+//#define FLASH_SIZE_CODE 0x2B
+#define FLASH_SIZE_CODE 0x35
+//#define FLASH_SIZE_CODE 0x1f
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
 #else
 #error "unsupported BOARD_FLASH_SIZE"
@@ -359,6 +366,12 @@ static bool checkCrc(uint8_t* pBuff, uint16_t length)
 
 static void setReceive()
 {
+	//TODO remove this
+//    GPIO3->PSOR = (1 << 27);	//ENC_A
+//    GPIO3->PCOR = (1 << 28);	//ENC_I
+
+//	GPIO3->PTOR = (1 << 27);	//ENC_A
+
   gpio_mode_set_input(input_pin, GPIO_PULL_UP);
   received = 0;
 }
@@ -368,6 +381,10 @@ static void setTransmit()
   // set high before we set as output to guarantee idle high
   gpio_set(input_pin);
   gpio_mode_set_output(input_pin, GPIO_OUTPUT_PUSH_PULL);
+
+  //TODO remove this
+//  GPIO3->PSOR = (1 << 28);	//ENC_I
+//  GPIO3->PCOR = (1 << 27);	//ENC_A
 
   // delay a bit to let the sender get setup for receiving
   // only delay if device info has been sent, this prevents
@@ -394,12 +411,18 @@ static void send_BAD_ACK()
 {
   serialwriteOneChar(0xC1);                // bad command message.
   invalid_command++;
+
+  //TODO remove this
+//  GPIO3->PTOR = (1 << 27);	//ENC_A
 }
 
 static void send_BAD_CRC_ACK()
 {
   serialwriteOneChar(0xC2);                // bad command message.
   invalid_command++;
+
+  //TODO remove this
+//  GPIO3->PTOR = (1 << 28);	//ENC_I
 }
 
 static void sendDeviceInfo()
@@ -417,6 +440,10 @@ static void decodeInput()
 {
   if (incoming_payload_no_command) {
     len = payload_buffer_size;
+
+//    //TODO remove this
+//    GPIO3->PTOR = (1 << 27);	//ENC_A
+
     if (checkCrc(rxBuffer,len)) {
       memset(payLoadBuffer, 0, sizeof(payLoadBuffer));             // reset buffer
 
@@ -425,9 +452,12 @@ static void decodeInput()
       }
       send_ACK();
       incoming_payload_no_command = 0;
+
       return;
     } else {
       send_BAD_CRC_ACK();
+//    	//TODO remove this
+//        GPIO3->PTOR = (1 << 28);	//ENC_I
       return;
     }
   }
@@ -491,6 +521,7 @@ static void decodeInput()
     }
 
     if (!save_flash_nolib((uint8_t*)payLoadBuffer, payload_buffer_size,address)) {
+//    if (0) {
       send_BAD_ACK();
     } else {
       send_ACK();
@@ -500,6 +531,9 @@ static void decodeInput()
   }
 
   if (cmd == CMD_SET_ADDRESS) {
+	//TODO remove this
+//	GPIO3->PTOR = (1 << 27);	//ENC_A
+
     // command set addressinput format is: CMD, 00 , High byte
     // address, Low byte address, crclb ,crchb
     len = 4;  // package without 2 byte crc
@@ -510,7 +544,18 @@ static void decodeInput()
 
     invalid_command = 0;
 
-    address = rxBuffer[2] << 8 | rxBuffer[3];
+    address = rxBuffer[2] << 8 | rxBuffer[3];	//0xF7E0. 0xf800
+
+//    if (address != 0xf7e0)
+//    {
+//    	__asm volatile ("nop");
+//    }
+    //TODO remove this
+//#if ADDRESS_SHIFT == 2
+//    address = 0x7800;
+//#else
+//    address = 0x1e000;
+//#endif
 
     /*
       check for magic addresses that map to specific areas
@@ -532,20 +577,34 @@ static void decodeInput()
     } else {
       // cope with ADDRESS_SHIFT for 128k flash boards, and add
       // in MCU base flash address
-      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
+//      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
+
+//    	address = 0x1e000;
+    	address += 0xe800;
+//    	address += 0x16400;
+//    	address += 0x163D0;
     }
+
+//	//TODO remove this
+//    GPIO3->PTOR = (1 << 28);	//ENC_I
 
     send_ACK();
     return;
   }
 
   if (cmd == CMD_SET_BUFFER) {
+	  //TODO remove this
+//	  GPIO3->PTOR = (1 << 28);	//ENC_I
+
     // for writing buffer rx buffer 0 = command byte.  command set
     // address, input , format is CMD, 00 , 00 or 01 (if buffer is 256),
     // buffer_size,
     len = 4;  // package without 2 byte crc
     if (!checkCrc((uint8_t*)rxBuffer, len)) {
       send_BAD_CRC_ACK();
+
+//  	//TODO remove this
+//      GPIO3->PTOR = (1 << 28);	//ENC_I
 
       return;
     }
@@ -563,6 +622,10 @@ static void decodeInput()
   }
 
   if (cmd == CMD_KEEP_ALIVE) {
+
+	//TODO remove this
+//	GPIO3->PTOR = (1 << 27);	//ENC_A
+
     len = 2;
     if (!checkCrc((uint8_t*)rxBuffer, len)) {
       send_BAD_CRC_ACK();
@@ -570,7 +633,8 @@ static void decodeInput()
       return;
     }
 
-    serialwriteOneChar(0xC1);                // bad command message.
+//    serialwriteOneChar(0xC1);                // bad command message.
+    send_BAD_ACK();
 
     return;
   }
@@ -594,6 +658,9 @@ static void decodeInput()
   }
 
   if (cmd == CMD_READ_FLASH_SIL) {
+//	  //TODO remove this
+//	  GPIO3->PTOR = (1 << 28);	//ENC_I
+
     // for sending contents of flash memory at the memory location set in
     // bootloader.c need to still set memory with data from set mem
     // command
@@ -635,7 +702,11 @@ static void decodeInput()
     return;
   }
 
-  serialwriteOneChar(0xC1);                // bad command message.
+  //TODO remove this
+//  GPIO3->PTOR = (1 << 28);	//ENC_I
+
+//  serialwriteOneChar(0xC1);                // bad command message.
+  send_BAD_ACK();
   invalid_command++;
 }
 
@@ -691,6 +762,8 @@ static bool serialreadChar()
 #ifdef SERIAL_STATS
         stats.no_start++;
 #endif
+//    	//TODO remove this
+//        GPIO3->PTOR = (1 << 28);	//ENC_I
         return false;
       }
     }
@@ -718,6 +791,9 @@ static bool serialreadChar()
     bits_to_read++;
   }
 
+	//TODO remove this
+//  GPIO3->PTOR = (1 << 28);	//ENC_I
+
   // wait till middle of stop bit, so we can check that too
   delayMicroseconds(BITTIME);
   if (!gpio_read(input_pin)) {
@@ -725,8 +801,14 @@ static bool serialreadChar()
 #ifdef SERIAL_STATS
     stats.bad_stop++;
 #endif
+    //TODO remove this
+    GPIO3->PTOR = (1 << 27);	//ENC_A
+
     return false;
   }
+
+	//TODO remove this
+  GPIO3->PTOR = (1 << 28);	//ENC_I
 
   // we got a good byte
   messagereceived = true;
@@ -798,6 +880,7 @@ static void receiveBuffer()
       if (count == payload_buffer_size+2U) {
         break;
       }
+
       rxBuffer[i] = rxbyte;
       count++;
     } else {
@@ -816,6 +899,10 @@ static void receiveBuffer()
     }
   }
   if (messagereceived) {
+      //TODO remove this
+//      GPIO3->PTOR = (1 << 28);	//ENC_I
+//	  GPIO3->PTOR = (1 << 27);	//ENC_A
+
     decodeInput();
   }else{
     invalid_command++;
@@ -832,20 +919,29 @@ static void update_EEPROM()
   }
   const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
   if (BOOTLOADER_VERSION != eeprom[2]) {
+//  if (true) {
     if (eeprom[2] == 0xFF || eeprom[2] == 0x00) {
-      return;
+//	if (eeprom[2] == 0xFF) {
+      return;	//TODO uncomment this
     }
 
     // update only the bootloader version, preserve all other bytes up to EEPROM_MAX_SIZE
     uint8_t data[EEPROM_MAX_SIZE];
-    memcpy(data, eeprom, EEPROM_MAX_SIZE);
-    data[2] = BOOTLOADER_VERSION;
+	memcpy(data, eeprom, EEPROM_MAX_SIZE);
+	data[2] = BOOTLOADER_VERSION;
 
-//#ifdef NXP
-//    uint8_t *p = &data[0];
-//
-//    save_flash_nolib(p, EEPROM_MAX_SIZE, EEPROM_START_ADD);
-//#else
+#ifdef NXP
+//    read_flash_bin(data, EEPROM_START_ADD, EEPROM_MAX_SIZE);
+//    data[2] = BOOTLOADER_VERSION;
+//    data[0] = 1;
+
+    uint8_t *p = &data[0];
+
+    save_flash_nolib(p, EEPROM_MAX_SIZE, EEPROM_START_ADD);
+#else
+//	memcpy(data, eeprom, EEPROM_MAX_SIZE);
+//	data[2] = BOOTLOADER_VERSION;
+
     // flash in 256 byte chunks as save_flash_nolib may not support larger chunks
     uint32_t remaining = EEPROM_MAX_SIZE;
     uint32_t addr = EEPROM_START_ADD;
@@ -858,7 +954,7 @@ static void update_EEPROM()
       addr += chunk;
       remaining -= chunk;
     }
-//#endif
+#endif
   }
 }
 #endif // UPDATE_EEPROM_ENABLE
@@ -935,6 +1031,7 @@ static void checkForSignal()
 static void test_clock(void)
 {
   setTransmit();
+
   while (1) {
     gpio_clear(input_pin);
     bl_timer_reset();
@@ -1013,14 +1110,13 @@ int main(void)
 #endif
 
   while (1) {
+//	jump_to_application();
+
     receiveBuffer();
 
-	jump_to_application();
-
-//
-//    if (invalid_command > 100) {
-//      jump();
-//    }
+    if (invalid_command > 100) {
+      jump();
+    }
 #if DRONECAN_SUPPORT
     if (DroneCAN_update()) {
       jump();
