@@ -22,15 +22,8 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
     	return false;
     }
 
+    //Disable interrupt routine
     __disable_irq();
-
-//    memset(&s_flashDriver, 0, sizeof(flash_config_t));
-//
-//    //Check if init went successful
-//    status = FLASH_API->flash_init(&s_flashDriver);
-//    if (status) {
-//    	__asm volatile ("nop");
-//    }
 
     uint32_t pflashBlockBase  = 0U;
     uint32_t pflashTotalSize  = 0U;
@@ -42,9 +35,6 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
     FLASH_API->flash_get_property(&s_flashDriver, kFLASH_PropertyPflashSectorSize, &pflashSectorSize);
     FLASH_API->flash_get_property(&s_flashDriver, kFLASH_PropertyPflashTotalSize, &pflashTotalSize);
     FLASH_API->flash_get_property(&s_flashDriver, kFLASH_PropertyPflashPageSize, &PflashPageSize);
-//
-////    uint32_t eeprom_address = s_flashDriver.PFlashBlockBase + (s_flashDriver.PFlashTotalSize - (1 * s_flashDriver.PFlashSectorSize));
-//    uint32_t dest_addr = pflashBlockBase + (pflashTotalSize - pflashSectorSize);
 
     //Erase last sector
 	status = FLASH_API->flash_erase_sector(&s_flashDriver, add, pflashSectorSize, kFLASH_ApiEraseKey);
@@ -58,24 +48,11 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 		return false;
 	}
 
-//	data[0] = 0x12;
-//	data[1] = 0x34;
-//	data[2] = 0xa5;
-//	data[3] = 0x5a;
-
-//	uint32_t num_flash_pages = length / PflashPageSize + ((length % PflashPageSize) > 0);
-
 	//Program data
 	status = FLASH_API->flash_program_page(&s_flashDriver, add, (uint8_t *)data, length);
 	if (status) {
 		return false;
 	}
-
-//	uint8_t readout[400] = {0};
-//	status = FLASH_API->flash_read(&s_flashDriver, add, readout, length);
-//	if (status) {
-//		__asm volatile ("nop");
-//	}
 
 	//Verify programmed data
 	uint32_t failed_data_addr 	= 0;
@@ -96,6 +73,7 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 		return false;
 	}
 
+	//Enable interrupt routine
 	__enable_irq();
 
 	return ((failed_data | failed_data_addr) == 0);
