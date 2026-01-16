@@ -62,11 +62,11 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 		return false;
 	}
 
-	//Clear cache
-	modifyReg32(&SYSCON->LPCAC_CTRL, 0, SYSCON_LPCAC_CTRL_CLR_LPCAC(1));
-
-	//Unclear cache
-	modifyReg32(&SYSCON->LPCAC_CTRL, SYSCON_LPCAC_CTRL_CLR_LPCAC(1), 0);
+//	//Clear cache
+//	modifyReg32(&SYSCON->LPCAC_CTRL, 0, SYSCON_LPCAC_CTRL_CLR_LPCAC(1));
+//
+//	//Unclear cache
+//	modifyReg32(&SYSCON->LPCAC_CTRL, SYSCON_LPCAC_CTRL_CLR_LPCAC(1), 0);
 
 	//Check if verify program found failed data
 	if (failed_data_addr != 0) {

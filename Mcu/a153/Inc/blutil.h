@@ -176,7 +176,10 @@ static inline void System_Init(void)
 	}
 
 	//Enable cache function
-	modifyReg32(&SYSCON->LPCAC_CTRL, SYSCON_LPCAC_CTRL_DIS_LPCAC(1), 0);
+//	modifyReg32(&SYSCON->LPCAC_CTRL, SYSCON_LPCAC_CTRL_DIS_LPCAC(1), 0);
+
+	//Disable cache function
+	modifyReg32(&SYSCON->LPCAC_CTRL, 0, SYSCON_LPCAC_CTRL_DIS_LPCAC(1));
 }
 
 /*
