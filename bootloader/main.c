@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#pragma GCC optimize("O0")
+//#pragma GCC optimize("O0")
 
 #include <eeprom.h>
 
@@ -869,9 +869,6 @@ static void update_EEPROM()
 
     save_flash_nolib(p, EEPROM_MAX_SIZE, EEPROM_START_ADD);
 #else
-//	memcpy(data, eeprom, EEPROM_MAX_SIZE);
-//	data[2] = BOOTLOADER_VERSION;
-
     // flash in 256 byte chunks as save_flash_nolib may not support larger chunks
     uint32_t remaining = EEPROM_MAX_SIZE;
     uint32_t addr = EEPROM_START_ADD;
