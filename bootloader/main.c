@@ -789,6 +789,8 @@ static void receiveBuffer()
   }
   if (messagereceived) {
     decodeInput();
+  }else{
+    invalid_command++;
   }
 }
 
