@@ -3,7 +3,7 @@
 */
 
 /* Entry Point */
-ENTRY(ResetISR)
+ENTRY(Reset_Handler)
 
 _estack = 0x20001000;    /* end of RAM */
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
@@ -12,12 +12,9 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-	PROGRAM_FLASH	(rx)   	: ORIGIN = 0x0, LENGTH = 0x4000 - 32	/* 16K bytes for bootloader */
-	DEVINFO 		(r) 	: ORIGIN = ORIGIN(PROGRAM_FLASH) + LENGTH(PROGRAM_FLASH), LENGTH = 32 
-	EEPROM			(rx)	: ORIGIN = 0x20000 - 0x2000, LENGTH = 0x2000
-  	SRAM 			(rwx)	: ORIGIN = 0x20000000, LENGTH = 0x6000 /* 24K bytes (alias RAM) */  
-  	SRAMX0 			(rwx) 	: ORIGIN = 0x4000000, LENGTH = 0x2000 /* 8K bytes (alias RAM2) */  
-  	SRAMX1 			(rwx) 	: ORIGIN = 0x4002000, LENGTH = 0x1000 /* 4K bytes (alias RAM3) */  
+FLASH (rx)      : ORIGIN = 0x0, LENGTH = 0x2000 - 32
+DEVINFO (r)     : ORIGIN = ORIGIN(FLASH) + LENGTH(FLASH), LENGTH = 32
+RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 4K
 }
 
 /* Define output sections */
@@ -29,7 +26,7 @@ SECTIONS
     . = ALIGN(4);
     KEEP(*(.isr_vector)) /* Startup code */
     . = ALIGN(4);
-  } >PROGRAM_FLASH
+  } >FLASH
 
   .devinfo :
   {
@@ -38,38 +35,22 @@ SECTIONS
     . = ALIGN(4);
   } >DEVINFO
 
-     /* MAIN TEXT SECTION */
-    .text : ALIGN(4)
-    {
-        __section_table_start = .;
-        __data_section_table = .;
-        LONG(LOADADDR(.data));
-        LONG(    ADDR(.data));
-        LONG(  SIZEOF(.data));
-        LONG(LOADADDR(.data_RAM2));
-        LONG(    ADDR(.data_RAM2));
-        LONG(  SIZEOF(.data_RAM2));
-        LONG(LOADADDR(.data_RAM3));
-        LONG(    ADDR(.data_RAM3));
-        LONG(  SIZEOF(.data_RAM3));
-        __data_section_table_end = .;
-        __bss_section_table = .;
-        LONG(    ADDR(.bss));
-        LONG(  SIZEOF(.bss));
-        LONG(    ADDR(.bss_RAM2));
-        LONG(  SIZEOF(.bss_RAM2));
-        LONG(    ADDR(.bss_RAM3));
-        LONG(  SIZEOF(.bss_RAM3));
-        __bss_section_table_end = .;
-        __section_table_end = . ;
-        /* End of Global Section Table */
+/* The program code and other data goes into FLASH */
+  .text :
+  {
+    . = ALIGN(4);
+    *(.text)           /* .text sections (code) */
+    *(.text*)          /* .text* sections (code) */
+    *(.glue_7)         /* glue arm to thumb code */
+    *(.glue_7t)        /* glue thumb to arm code */
+    *(.eh_frame)
 
-        *(.after_vectors*)
+    KEEP (*(.init))
+    KEEP (*(.fini))
 
-       *(.text*)
-       *(.rodata .rodata.* .constdata .constdata.*)
-       . = ALIGN(4);
-    } > PROGRAM_FLASH
+    . = ALIGN(4);
+    _etext = .;        /* define a global symbols at end of code */
+  } >FLASH
 
   /* Constant data goes into FLASH */
   .rodata :
@@ -78,169 +59,77 @@ SECTIONS
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     . = ALIGN(4);
-  } >PROGRAM_FLASH
+  } >FLASH
 
-    /*
-     * for exception handling/unwind - some Newlib functions (in common
-     * with C++ and STDC++) use this.
-     */
-    .ARM.extab : ALIGN(4)
-    {
-        *(.ARM.extab* .gnu.linkonce.armextab.*)
-    } > PROGRAM_FLASH
-
-    .ARM.exidx : ALIGN(4)
-    {
-        __exidx_start = .;
-        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-        __exidx_end = .;
-    } > PROGRAM_FLASH
+  .ARM.extab   : { *(.ARM.extab* .gnu.linkonce.armextab.*) } >FLASH
+  .ARM : {
+    __exidx_start = .;
+    *(.ARM.exidx*)
+    __exidx_end = .;
+  } >FLASH
 
   .preinit_array     :
   {
     PROVIDE_HIDDEN (__preinit_array_start = .);
     KEEP (*(.preinit_array*))
     PROVIDE_HIDDEN (__preinit_array_end = .);
-  } >PROGRAM_FLASH
+  } >FLASH
   .init_array :
   {
     PROVIDE_HIDDEN (__init_array_start = .);
     KEEP (*(SORT(.init_array.*)))
     KEEP (*(.init_array*))
     PROVIDE_HIDDEN (__init_array_end = .);
-  } >PROGRAM_FLASH
+  } >FLASH
   .fini_array :
   {
     PROVIDE_HIDDEN (__fini_array_start = .);
     KEEP (*(SORT(.fini_array.*)))
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
-  } >PROGRAM_FLASH
+  } >FLASH
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
-  
-      /* DATA section for SRAMX0 */
 
-	.data_RAM2 : ALIGN(4)
-	{
-	    FILL(0xff)
-	    PROVIDE(__start_data_RAM2 = .) ;
-	    PROVIDE(__start_data_SRAMX0 = .) ;
-	    *(.ramfunc.$RAM2)
-	    *(.ramfunc.$SRAMX0)
-	    *(.data.$RAM2)
-	    *(.data.$SRAMX0)
-	    *(.data.$RAM2.*)
-	    *(.data.$SRAMX0.*)
-	    . = ALIGN(4) ;
-	    PROVIDE(__end_data_RAM2 = .) ;
-	    PROVIDE(__end_data_SRAMX0 = .) ;
-	 } > SRAMX0 AT>PROGRAM_FLASH
-	
-	/* DATA section for SRAMX1 */
-	
-	.data_RAM3 : ALIGN(4)
-	{
-	    FILL(0xff)
-	    PROVIDE(__start_data_RAM3 = .) ;
-	    PROVIDE(__start_data_SRAMX1 = .) ;
-	    *(.ramfunc.$RAM3)
-	    *(.ramfunc.$SRAMX1)
-	    *(.data.$RAM3)
-	    *(.data.$SRAMX1)
-	    *(.data.$RAM3.*)
-	    *(.data.$SRAMX1.*)
-	    . = ALIGN(4) ;
-	    PROVIDE(__end_data_RAM3 = .) ;
-	    PROVIDE(__end_data_SRAMX1 = .) ;
-	 } > SRAMX1 AT>PROGRAM_FLASH
+  /* Initialized data sections goes into RAM, load LMA copy after code */
+  .data : 
+  {
+    . = ALIGN(4);
+    _sdata = .;        /* create a global symbol at data start */
+    *(.data)           /* .data sections */
+    *(.data*)          /* .data* sections */
 
-    /* Main DATA section (SRAM) */
-    .data : ALIGN(4)
-    {
-       FILL(0xff)
-       _data = . ;
-       PROVIDE(__start_data_RAM = .) ;
-       PROVIDE(__start_data_SRAM = .) ;
-       *(vtable)
-       *(.ramfunc*)
-       KEEP(*(CodeQuickAccess))
-       KEEP(*(DataQuickAccess))
-       *(RamFunction)
-       *(.data*)
-       . = ALIGN(4) ;
-       _edata = . ;
-       PROVIDE(__end_data_RAM = .) ;
-       PROVIDE(__end_data_SRAM = .) ;
-    } > SRAM AT>PROGRAM_FLASH
+    . = ALIGN(4);
+    _edata = .;        /* define a global symbol at data end */
+  } >RAM AT> FLASH
 
-    /* BSS section for SRAMX0 */
-    .bss_RAM2 (NOLOAD) : ALIGN(4)
-    {
-       PROVIDE(__start_bss_RAM2 = .) ;
-       PROVIDE(__start_bss_SRAMX0 = .) ;
-       *(.bss.$RAM2)
-       *(.bss.$SRAMX0)
-       *(.bss.$RAM2.*)
-       *(.bss.$SRAMX0.*)
-       . = ALIGN (. != 0 ? 4 : 1) ; /* avoid empty segment */
-       PROVIDE(__end_bss_RAM2 = .) ;
-       PROVIDE(__end_bss_SRAMX0 = .) ;
-    } > SRAMX0 AT> SRAMX0
+  /* Uninitialized data section */
+  . = ALIGN(4);
+  .bss :
+  {
+    /* This is used by the startup in order to initialize the .bss secion */
+    _sbss = .;         /* define a global symbol at bss start */
+    __bss_start__ = _sbss;
+    *(.bss)
+    *(.bss*)
+    *(COMMON)
 
-    /* BSS section for SRAMX1 */
-    .bss_RAM3 (NOLOAD) : ALIGN(4)
-    {
-       PROVIDE(__start_bss_RAM3 = .) ;
-       PROVIDE(__start_bss_SRAMX1 = .) ;
-       *(.bss.$RAM3)
-       *(.bss.$SRAMX1)
-       *(.bss.$RAM3.*)
-       *(.bss.$SRAMX1.*)
-       . = ALIGN (. != 0 ? 4 : 1) ; /* avoid empty segment */
-       PROVIDE(__end_bss_RAM3 = .) ;
-       PROVIDE(__end_bss_SRAMX1 = .) ;
-    } > SRAMX1 AT> SRAMX1
-    
-    /* MAIN BSS SECTION */
-    .bss (NOLOAD) : ALIGN(4)
-    {
-        _bss = .;
-        PROVIDE(__start_bss_RAM = .) ;
-        PROVIDE(__start_bss_SRAM = .) ;
-        *(.bss*)
-        *(COMMON)
-        . = ALIGN(4) ;
-        _ebss = .;
-        PROVIDE(__end_bss_RAM = .) ;
-        PROVIDE(__end_bss_SRAM = .) ;
-        PROVIDE(end = .);
-    } > SRAM AT> SRAM
+    . = ALIGN(4);
+    _ebss = .;         /* define a global symbol at bss end */
+    __bss_end__ = _ebss;
+  } >RAM
 
-    /* Reserve and place Heap within memory map */
-    _HeapSize = 0x600;
-    .heap (NOLOAD) :  ALIGN(4)
-    {
-        _pvHeapStart = .;
-        . += _HeapSize;
-        . = ALIGN(4);
-        _pvHeapLimit = .;
-    } > SRAM
-
-     _StackSize = 0x600;
-     /* Reserve space in memory for Stack */
-    .heap2stackfill (NOLOAD) :
-    {
-        . += _StackSize;
-    } > SRAM
-    /* Locate actual Stack in memory map */
-    .stack ORIGIN(SRAM) + LENGTH(SRAM) - _StackSize - 0 (NOLOAD) :  ALIGN(4)
-    {
-        _vStackBase = .;
-        . = ALIGN(4);
-        _vStackTop = . + _StackSize;
-    } > SRAM
+  /* User_heap_stack section, used to check that there is enough RAM left */
+  ._user_heap_stack :
+  {
+    . = ALIGN(8);
+    PROVIDE ( end = . );
+    PROVIDE ( _end = . );
+    . = . + _Min_Heap_Size;
+    . = . + _Min_Stack_Size;
+    . = ALIGN(8);
+  } >RAM
 
   /* Remove information from the standard libraries */
   /DISCARD/ :
