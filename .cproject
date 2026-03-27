@@ -111,19 +111,20 @@
 			<resource resourceType="PROJECT" workspacePath="/AM32-bootloader"/>
 		</configuration>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
+	<storageModule moduleId="com.crt.config"/>
 	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
 		<buildTargets>
-			<target name="AM32_A153_BOOTLOADER_P1_2" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+			<target name="AM32_A153_BOOTLOADER_PB2" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
 				<buildCommand>make</buildCommand>
 				<buildArguments/>
-				<buildTarget>AM32_A153_BOOTLOADER_P1_2</buildTarget>
+				<buildTarget>AM32_A153_BOOTLOADER_PB2</buildTarget>
 				<stopOnError>true</stopOnError>
 				<useDefaultCommand>true</useDefaultCommand>
 				<runAllBuilders>true</runAllBuilders>
 			</target>
 			<target name="clean" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
 				<buildCommand>make</buildCommand>
-				<buildArguments/>
 				<buildTarget>clean</buildTarget>
 				<stopOnError>true</stopOnError>
 				<useDefaultCommand>true</useDefaultCommand>
@@ -131,6 +132,4 @@
 			</target>
 		</buildTargets>
 	</storageModule>
-	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
-	<storageModule moduleId="com.crt.config"/>
 </cproject>

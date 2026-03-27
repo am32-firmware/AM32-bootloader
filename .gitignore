@@ -12,3 +12,6 @@ tools/
 *.o
 .DS_Store
 .vscode/settings.json
+.settings/
+.cproject
+.project

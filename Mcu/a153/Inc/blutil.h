@@ -22,6 +22,14 @@
 
 #define GPIO_OUTPUT_PUSH_PULL 3	//This variable is unused for MCXA153 but needed to build main.c
 
+#define GPIO_PIN(n) (1U<<(n))
+
+// Link STM GPIO and PORT to NXP ones
+#define GPIOA PORT0
+#define GPIOB PORT1
+#define GPIOC PORT2
+#define GPIOD PORT3
+
 flash_config_t s_flashDriver;
 
 static inline void gpio_mode_set_input(uint32_t pin, uint32_t pull_up_down)

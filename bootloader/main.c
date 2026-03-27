@@ -74,34 +74,51 @@
 #endif
 
 #ifdef USE_PA2
-#define input_pin        2
-#define input_port       GPIO0
+#define input_pin        GPIO_PIN(2)
+#define input_port       GPIOA
+#ifdef GPIO1		//NXP peripheral
+#define input_GPIO 		GPIO0
+#endif
 #define PIN_NUMBER       2
 #define PORT_LETTER      0
 #elif defined(USE_PB4)
 #define input_pin         GPIO_PIN(4)
 #define input_port        GPIOB
+#ifdef GPIO1		//NXP peripheral
+#define input_GPIO 		GPIO1
+#endif
 #define PIN_NUMBER        4
 #define PORT_LETTER       1
 #elif defined(USE_PA15)
 #define input_pin         GPIO_PIN(15)
 #define input_port        GPIOA
+#ifdef GPIO1		//NXP peripheral
+#define input_GPIO 		GPIO0
+#endif
 #define PIN_NUMBER        15
 #define PORT_LETTER       0
 #elif defined(USE_PA6)
 #define input_pin         GPIO_PIN(6)
 #define input_port        GPIOA
+#ifdef GPIO1		//NXP peripheral
+#define input_GPIO 		GPIO0
+#endif
 #define PIN_NUMBER        6
 #define PORT_LETTER       0
 #elif defined(USE_PA0)
 #define input_pin         GPIO_PIN(0)
 #define input_port        GPIOA
+#ifdef GPIO1		//NXP peripheral
+#define input_GPIO 		GPIO0
+#endif
 #define PIN_NUMBER        0
 #define PORT_LETTER       0
-#elif defined(USE_P1_2)
-#define input_pin 		2
-#define input_port 		PORT1
+#elif defined(USE_PB2)
+#define input_pin 		GPIO_PIN(2)
+#define input_port 		GPIOB
+#ifdef GPIO1		//NXP peripheral
 #define input_GPIO 		GPIO1
+#endif
 #define PIN_NUMBER    	2
 #define PORT_LETTER   	1
 #else

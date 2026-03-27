@@ -23,7 +23,7 @@ include $(ROOT)/make/tools.mk
 MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A153
 
 # we support bootloader comms on a list of possible pins
-BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 P1_2
+BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 PB2
 
 # filter out any unsupported MCUs for this host OS
 filter_mcus = $(foreach w,$(MCU_NOBUILD),$(eval MCU_BUILDS := $(filter-out $w,$(MCU_BUILDS))))$(MCU_BUILDS)
@@ -85,10 +85,20 @@ BOOTLOADER_VERSION := $(shell $(FGREP) "define BOOTLOADER_VERSION" $(MAIN_INC_DI
 SRC_BL := $(foreach dir,bootloader,$(wildcard $(dir)/*.[cs]))
 SRC_BLU := $(foreach dir,bl_update,$(wildcard $(dir)/*.[cs]))
 
+TARGET := $(word 1, $(MAKECMDGOALS))
+MCU_FROM_TARGET := $(word 2, $(subst _, ,$(TARGET)))
+
+ifeq ($(MCU_FROM_TARGET), A153)
+LDSCRIPT_BL := Mcu/a153/MCXA_FLASH.ld
+LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
+LDSCRIPT_BLU := Mcu/a153/MCXA_FLASH.ld
+LDSCRIPT_BLU_CAN := bl_update/ldscript_bl_CAN.ld
+else
 LDSCRIPT_BL := bootloader/ldscript_bl.ld
 LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
 LDSCRIPT_BLU := bl_update/ldscript_bl.ld
 LDSCRIPT_BLU_CAN := bl_update/ldscript_bl_CAN.ld
+endif
 
 # Function to extract CFLAGS based on target name
 get_flash_size = $(if $(filter %K,$(word 2,$(subst _, ,$1))),-DBOARD_FLASH_SIZE=$(subst K,,$(word 2,$(subst _, ,$1))))
