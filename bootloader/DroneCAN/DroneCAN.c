@@ -820,8 +820,8 @@ static void *memmem(const void *haystack, size_t haystacklen, const void *needle
     if (memcmp(p, needle, needlelen) == 0) {
       return p;
     }
-    haystack = p+1;
     haystacklen -= (p - (const char *)haystack) + 1;
+    haystack = p+1;
   }
   return NULL;
 }
