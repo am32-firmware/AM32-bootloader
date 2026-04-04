@@ -52,3 +52,14 @@ Getting Help
 If you need help with bootloader development please ask on the AM32
 discord server in the development channel
 https://discord.com/invite/h7ddYMmEVV
+
+
+# Usage
+
+```bash
+
+make AM32_F401_BOOTLOADER_PB4
+# or
+make AM32_F051_BOOTLOADER_PB4
+```
+

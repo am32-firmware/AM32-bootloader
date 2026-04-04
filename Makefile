@@ -20,7 +20,7 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN
+MCU_BUILDS := E230 F031 F051 F401 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0
@@ -62,8 +62,11 @@ BIN_DIR := $(ROOT)/$(OBJ)
 # find the SVD files
 $(foreach MCU,$(MCU_TYPES),$(eval SVD_$(MCU) := $(wildcard $(HAL_FOLDER_$(MCU))/*.svd)))
 
-.PHONY : clean all
+.PHONY : clean all flash
 all : check_tools bootloaders
+
+FLASH_BIN ?= $(OBJ)/debug.bin
+FLASH_ADDR ?= 0x08000000
 
 # Check if tools are installed
 check_tools:
@@ -186,6 +189,7 @@ $(BLU_ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BLU) $(H_FILE)
 $(HEX_FILE): $$(ELF_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
 	$$(QUIET)$(xOBJCOPY) -O binary $$(<) $$(@:.hex=.bin)
+	$$(QUIET)$$(CP) -f $$(@:.hex=.bin) $$(OBJ)$$(DSEP)debug.bin
 	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@:.bin=.hex)
 
 $(BIN_FILE): $$(HEX_FILE)
@@ -228,3 +232,10 @@ targets:
 updater_targets:
 	$(QUIET)echo List of updater targets. To build a target use 'make TARGETNAME'
 	$(QUIET)echo $(BLU_BUILDS)
+
+flash:
+	@$(SHELL) -c 'command -v st-flash >/dev/null 2>&1 || { echo "Error: st-flash not found. Please install stlink tools."; exit 1; }'
+	@test -f "$(FLASH_BIN)" || { echo "Error: $(FLASH_BIN) not found. Build a target first (for example: make AM32_F401_BOOTLOADER_PB4)."; exit 1; }
+	@echo Flashing $(FLASH_BIN) to $(FLASH_ADDR) with st-flash
+	@st-flash --reset write "$(FLASH_BIN)" $(FLASH_ADDR)
+
