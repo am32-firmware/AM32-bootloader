@@ -30,6 +30,9 @@
 // use this to check the backup domain registers work
 //#define BOOTLOADER_TEST_BKUP
 
+// use this to blink PB15 for GPIO test
+#define BOOTLOADER_TEST_PB15_BLINK
+
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
 
@@ -1023,6 +1026,24 @@ static void test_rtc_backup(void)
 }
 #endif
 
+#ifdef BOOTLOADER_TEST_PB15_BLINK
+/*
+  test PB15 GPIO by blinking continuously
+ */
+static void test_pb15_blink(void)
+{
+  const uint16_t blink_pin = GPIO_PIN(15);
+  gpio_mode_set_output(blink_pin, GPIO_OUTPUT_PUSH_PULL);
+
+  while (true) {
+    gpio_set(blink_pin);
+    delayMicroseconds(50000);
+    gpio_clear(blink_pin);
+    delayMicroseconds(50000);
+  }
+}
+#endif // BOOTLOADER_TEST_PB15_BLINK
+
 int main(void)
 {
   bl_clock_config();
@@ -1037,6 +1058,9 @@ int main(void)
 #endif
 #ifdef BOOTLOADER_TEST_BKUP
   test_rtc_backup();
+#endif
+#ifdef BOOTLOADER_TEST_PB15_BLINK
+  test_pb15_blink();
 #endif
 
   checkForSignal();

@@ -15,3 +15,4 @@ tools/
 .settings/
 .cproject
 .project
+**.tar.gz
