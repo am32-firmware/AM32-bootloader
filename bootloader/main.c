@@ -155,7 +155,7 @@ static uint16_t invalid_command;
 
 #elif BOARD_FLASH_SIZE == 64
 #define EEPROM_START_ADD (0x10000 - FLASH_SECTOR_SIZE)
-#define FLASH_SIZE_CODE 0x35
+#define FLASH_SIZE_CODE 0x15
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 128
@@ -563,9 +563,7 @@ static void decodeInput()
     } else {
       // cope with ADDRESS_SHIFT for 128k flash boards, and add
       // in MCU base flash address
-//      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
-
-    	address += 0xe800;	//TODO remove correction after online configurator has been updated
+      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
     }
 
     send_ACK();
