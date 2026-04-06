@@ -20,11 +20,11 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A153
+MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN
 
 # NXP A153 uses its own linker script
-A153_LDSCRIPT     := Mcu/a153/MCXA_FLASH.ld
-A153_LDSCRIPT_BLU := Mcu/a153/MCXA_FLASH.ld
+# A153_LDSCRIPT     := Mcu/a153/MCXA_FLASH.ld
+# A153_LDSCRIPT_BLU := Mcu/a153/MCXA_FLASH.ld
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 PB2
