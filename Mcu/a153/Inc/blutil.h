@@ -13,8 +13,8 @@
 
 #define NXP
 
-// Use 128k of flash
-#define BOARD_FLASH_SIZE 128
+// Use 64k of flash
+#define BOARD_FLASH_SIZE 64
 
 #define GPIO_PULL_NONE 2
 #define GPIO_PULL_UP   1

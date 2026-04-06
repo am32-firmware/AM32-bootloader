@@ -148,20 +148,15 @@ static uint16_t invalid_command;
 #error "must define FLASH_SECTOR_SIZE"
 #endif
 
-#if BOARD_FLASH_SIZE == 32
-#define EEPROM_START_ADD (0x8000 - FLASH_SECTOR_SIZE)
-#define FLASH_SIZE_CODE 0x1f
-#define ADDRESS_SHIFT 0
-
-#elif BOARD_FLASH_SIZE == 64
+#if BOARD_FLASH_SIZE == 64
 #define EEPROM_START_ADD (0x10000 - FLASH_SECTOR_SIZE)
-#define FLASH_SIZE_CODE 0x35
+#define FLASH_SIZE_CODE 0x15
 #define ADDRESS_SHIFT 0
 
 #elif BOARD_FLASH_SIZE == 128
 #define EEPROM_START_ADD (0x20000 - FLASH_SECTOR_SIZE)
 //#define FLASH_SIZE_CODE 0x2B
-#define FLASH_SIZE_CODE 0x35
+#define FLASH_SIZE_CODE 0x16
 #define ADDRESS_SHIFT 2 // addresses from the bl client are shifted 2 bits before being used
 #else
 #error "unsupported BOARD_FLASH_SIZE"
@@ -563,9 +558,7 @@ static void decodeInput()
     } else {
       // cope with ADDRESS_SHIFT for 128k flash boards, and add
       // in MCU base flash address
-//      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
-
-    	address += 0xe800;	//TODO remove correction after online configurator has been updated
+      address = MCU_FLASH_START + (address << ADDRESS_SHIFT);
     }
 
     send_ACK();

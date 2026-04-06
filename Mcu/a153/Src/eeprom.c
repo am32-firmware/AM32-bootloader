@@ -18,7 +18,7 @@ uint32_t status = 0;
 bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 {
 	//Check if address and length is within 128 bytes boundary
-    if ((add % 0x2000) != 0) {
+    if ((add % 0x80) != 0) {
     	return false;
     }
 
@@ -36,6 +36,8 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
     FLASH_API->flash_get_property(&s_flashDriver, kFLASH_PropertyPflashTotalSize, &pflashTotalSize);
     FLASH_API->flash_get_property(&s_flashDriver, kFLASH_PropertyPflashPageSize, &PflashPageSize);
 
+    if(add % 0x2000 == 0){
+	 
     //Erase last sector
 	status = FLASH_API->flash_erase_sector(&s_flashDriver, add, pflashSectorSize, kFLASH_ApiEraseKey);
 	if (status) {
@@ -47,7 +49,7 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
 	if (status) {
 		return false;
 	}
-
+	}
 	//Program data
 	status = FLASH_API->flash_program_page(&s_flashDriver, add, (uint8_t *)data, length);
 	if (status) {

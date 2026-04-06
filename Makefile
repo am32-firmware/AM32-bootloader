@@ -22,6 +22,10 @@ include $(ROOT)/make/tools.mk
 # MCU builds, if with _xxK then adds build with given flash size
 MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A153
 
+# NXP A153 linker script
+A153_LDSCRIPT     := Mcu/a153/MCXA_FLASH.ld
+A153_LDSCRIPT_BLU := Mcu/a153/MCXA_FLASH.ld
+
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 PB2
 
@@ -88,17 +92,10 @@ SRC_BLU := $(foreach dir,bl_update,$(wildcard $(dir)/*.[cs]))
 TARGET := $(word 1, $(MAKECMDGOALS))
 MCU_FROM_TARGET := $(word 2, $(subst _, ,$(TARGET)))
 
-ifeq ($(MCU_FROM_TARGET), A153)
-LDSCRIPT_BL := Mcu/a153/MCXA_FLASH.ld
-LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
-LDSCRIPT_BLU := Mcu/a153/MCXA_FLASH.ld
-LDSCRIPT_BLU_CAN := bl_update/ldscript_bl_CAN.ld
-else
 LDSCRIPT_BL := bootloader/ldscript_bl.ld
 LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
 LDSCRIPT_BLU := bl_update/ldscript_bl.ld
 LDSCRIPT_BLU_CAN := bl_update/ldscript_bl_CAN.ld
-endif
 
 # Function to extract CFLAGS based on target name
 get_flash_size = $(if $(filter %K,$(word 2,$(subst _, ,$1))),-DBOARD_FLASH_SIZE=$(subst K,,$(word 2,$(subst _, ,$1))))
