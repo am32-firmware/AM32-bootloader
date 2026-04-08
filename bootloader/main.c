@@ -116,6 +116,13 @@ static uint16_t invalid_command;
 
 #include <blutil.h>
 
+// default no-op LED functions if not provided by blutil.h
+#ifndef USE_RGB_LED
+static inline void bl_led_init(void) {}
+static inline void bl_led_on(void) {}
+static inline void bl_led_off(void) {}
+#endif
+
 #if DRONECAN_SUPPORT
 #include "DroneCAN/DroneCAN.h"
 #include "DroneCAN/sys_can.h"
@@ -263,6 +270,29 @@ static void serialwriteOneChar(uint8_t data);
 // used for timing bytes
 static uint16_t us_start;
 
+/*
+  blink all RGB LEDs at ~2.5Hz when stuck in bootloader
+ */
+#ifdef USE_RGB_LED
+static uint16_t led_timer_start;
+static uint8_t led_blink_counter;
+
+static void bl_led_update(void)
+{
+  const uint16_t now = bl_timer_us();
+  if ((uint16_t)(now - led_timer_start) < 25000U) {
+    return;
+  }
+  led_timer_start = now;
+  led_blink_counter++;
+  if (led_blink_counter & 0x08) {
+    bl_led_on();
+  } else {
+    bl_led_off();
+  }
+}
+#endif
+
 static void bl_timer_reset(void)
 {
   us_start = bl_timer_us();
@@ -332,6 +362,7 @@ static void jump()
   sys_can_disable_IRQ();
 #endif
 
+  bl_led_off();
   jump_to_application();
 #endif
 }
@@ -693,21 +724,29 @@ static bool serialreadChar()
   // now we need to wait for the start bit leading edge, which is low
   bl_timer_reset();
   while (gpio_read(input_pin)) {
-    if (bl_timer_elapsed() > 5*BITTIME) {
+    uint16_t elapsed = bl_timer_elapsed();
+    if (messagereceived && elapsed > 5*BITTIME) {
+      // we've been waiting too long, don't allow for long gaps
+      // between bytes
+#ifdef SERIAL_STATS
+      stats.no_start++;
+#endif
+      return false;
+    }
 #if DRONECAN_SUPPORT
+    // Check DroneCAN every ~50ms when waiting for first byte.
+    // DroneCAN_boot_ok() scans flash (~2-5ms per call), so we
+    // rate-limit to avoid blocking serial start-bit detection.
+    if (!messagereceived && elapsed > 50000) {
       if (DroneCAN_update()) {
         jump();
       }
-#endif
-      if (messagereceived) {
-        // we've been waiting too long, don't allow for long gaps
-        // between bytes
-#ifdef SERIAL_STATS
-        stats.no_start++;
-#endif
-        return false;
-      }
+      bl_timer_reset();
     }
+#endif
+#ifdef USE_RGB_LED
+    bl_led_update();
+#endif
   }
 
   // wait to get the center of bit time. We want to sample at the
@@ -1010,6 +1049,7 @@ int main(void)
   bl_clock_config();
   bl_timer_init();
   bl_gpio_init();
+  bl_led_init();
 
 #ifdef BOOTLOADER_TEST_CLOCK
   test_clock();

@@ -176,6 +176,34 @@ static inline void bl_gpio_init(void)
 }
 
 /*
+  RGB LED support (active low)
+ */
+#ifdef USE_RGB_LED
+static inline void bl_led_init(void)
+{
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOC);
+  LL_GPIO_SetPinMode(GPIOC, GPIO_PIN(LED_RED_PIN), LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(GPIOC, GPIO_PIN(LED_RED_PIN), LL_GPIO_OUTPUT_OPENDRAIN);
+  LL_GPIO_SetPinMode(GPIOC, GPIO_PIN(LED_GREEN_PIN), LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(GPIOC, GPIO_PIN(LED_GREEN_PIN), LL_GPIO_OUTPUT_OPENDRAIN);
+  LL_GPIO_SetPinMode(GPIOC, GPIO_PIN(LED_BLUE_PIN), LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(GPIOC, GPIO_PIN(LED_BLUE_PIN), LL_GPIO_OUTPUT_OPENDRAIN);
+  // LEDs off (open drain high = hi-Z = off)
+  LL_GPIO_SetOutputPin(GPIOC, GPIO_PIN(LED_RED_PIN) | GPIO_PIN(LED_GREEN_PIN) | GPIO_PIN(LED_BLUE_PIN));
+}
+
+static inline void bl_led_on(void)
+{
+  LL_GPIO_ResetOutputPin(GPIOC, GPIO_PIN(LED_RED_PIN) | GPIO_PIN(LED_GREEN_PIN) | GPIO_PIN(LED_BLUE_PIN));
+}
+
+static inline void bl_led_off(void)
+{
+  LL_GPIO_SetOutputPin(GPIOC, GPIO_PIN(LED_RED_PIN) | GPIO_PIN(LED_GREEN_PIN) | GPIO_PIN(LED_BLUE_PIN));
+}
+#endif // USE_RGB_LED
+
+/*
   return true if the MCU booted under a software reset
  */
 static inline bool bl_was_software_reset(void)
