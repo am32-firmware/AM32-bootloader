@@ -31,7 +31,14 @@
 //#define BOOTLOADER_TEST_BKUP
 
 // use this to blink PB15 for GPIO test
-#define BOOTLOADER_TEST_PB15_BLINK
+//#define BOOTLOADER_TEST_PB15_BLINK
+
+// enable software debug UART output on PB2 (TX) and PB1 (RX)
+#if defined(USE_PB4)
+#define DEBUG_UART_PB2_PB1 1
+#else
+#define DEBUG_UART_PB2_PB1 0
+#endif
 
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
@@ -277,12 +284,23 @@ static void receiveBuffer();
 static void serialwriteChar(uint8_t data);
 static void serialwriteOneChar(uint8_t data);
 
+#if DEBUG_UART_PB2_PB1
+static void debug_uart_init(void);
+static void debug_uart_write_char(uint8_t data);
+static void debug_uart_write_str(const char *str);
+#endif
+
 #define BAUDRATE      19200
 #define BITTIME          52 // 1000000/BAUDRATE
 #define HALFBITTIME      26 // 500000/BAUDRATE
 
 // used for timing bytes
 static uint16_t us_start;
+
+#if DEBUG_UART_PB2_PB1
+#define debug_tx_pin GPIO_PIN(2)
+#define debug_rx_pin GPIO_PIN(1)
+#endif
 
 static void bl_timer_reset(void)
 {
@@ -300,6 +318,43 @@ static void delayMicroseconds(uint16_t micros)
   while (bl_timer_elapsed() < micros) {
   }
 }
+
+#if DEBUG_UART_PB2_PB1
+static void debug_uart_init(void)
+{
+  // RX is configured for future extension; current logging path is TX only.
+  gpio_mode_set_input(debug_rx_pin, GPIO_PULL_UP);
+  gpio_mode_set_output(debug_tx_pin, GPIO_OUTPUT_PUSH_PULL);
+  gpio_set(debug_tx_pin);
+}
+
+static void debug_uart_write_char(uint8_t data)
+{
+  gpio_clear(debug_tx_pin);
+  delayMicroseconds(BITTIME);
+
+  for (uint8_t i = 0; i < 8; i++) {
+    if (data & 0x01) {
+      gpio_set(debug_tx_pin);
+    } else {
+      gpio_clear(debug_tx_pin);
+    }
+    data >>= 1;
+    delayMicroseconds(BITTIME);
+  }
+
+  gpio_set(debug_tx_pin);
+  delayMicroseconds(BITTIME);
+}
+
+static void debug_uart_write_str(const char *str)
+{
+  while (*str != '\0') {
+    debug_uart_write_char((uint8_t)*str);
+    str++;
+  }
+}
+#endif
 
 /*
   jump to the application firmware
@@ -1050,6 +1105,11 @@ int main(void)
   bl_timer_init();
   bl_gpio_init();
 
+#if DEBUG_UART_PB2_PB1
+  debug_uart_init();
+  debug_uart_write_str("bootloader start\r\n");
+#endif
+
 #ifdef BOOTLOADER_TEST_CLOCK
   test_clock();
 #endif
@@ -1078,6 +1138,9 @@ int main(void)
   while (1) {
     receiveBuffer();
 
+#ifdef DEBUG_UART_PB2_PB1
+    debug_uart_write_str("This message\r\n");
+#endif
     if (invalid_command > 100) {
       jump();
     }
