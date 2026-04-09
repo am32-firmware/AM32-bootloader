@@ -27,6 +27,7 @@ CFLAGS_$(MCU) += \
 	-DMCU_G431 \
 	-DUSE_FULL_LL_DRIVER \
 	-DPREFETCH_ENABLE=1 \
+	-DBOARD_FLASH_SIZE=128 \
 	-DRAM_LIMIT_KB=112
 
 # RGB LED on PC6 (red), PC7 (green), PC8 (blue), active low
