@@ -312,6 +312,10 @@ static inline void bl_debug_send(const char *data, uint32_t len)
   LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_1, (uint32_t)data);
   LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, len);
   LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_1);
+  // wait for transfer to complete so no DMA runs during bit-banged serial
+  while (!LL_DMA_IsActiveFlag_TC1(DMA1)) {}
+  LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);
+  LL_DMA_ClearFlag_TC1(DMA1);
 }
 
 static inline uint32_t bl_strlen(const char *s)

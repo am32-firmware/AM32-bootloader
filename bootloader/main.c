@@ -452,31 +452,41 @@ static void setTransmit()
 
 static void serialwriteOneChar(uint8_t c)
 {
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
   setTransmit();
   serialwriteChar(c);
   setReceive();
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 }
 
 static void send_ACK()
 {
+  bl_debug_print("tx: ACK\r\n");
   serialwriteOneChar(0x30);             // good ack!
   invalid_command = 0;
 }
 
 static void send_BAD_ACK()
 {
+  bl_debug_print("tx: BAD_ACK\r\n");
   serialwriteOneChar(0xC1);                // bad command message.
   invalid_command++;
 }
 
 static void send_BAD_CRC_ACK()
 {
+  bl_debug_print("tx: BAD_CRC\r\n");
   serialwriteOneChar(0xC2);                // bad command message.
   invalid_command++;
 }
 
 static void sendDeviceInfo()
 {
+  bl_debug_print("tx: deviceInfo\r\n");
   sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
   initialized = true;
 }
@@ -781,6 +791,11 @@ static bool serialreadChar()
 #endif
   }
 
+  // start bit detected - disable CAN IRQs to protect bit-banged timing
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
+
   // wait to get the center of bit time. We want to sample at the
   // middle of each bit
   delayMicroseconds(HALFBITTIME);
@@ -789,6 +804,9 @@ static bool serialreadChar()
     // which should still be low
 #ifdef SERIAL_STATS
     stats.bad_start++;
+#endif
+#if DRONECAN_SUPPORT
+    sys_can_enable_IRQ();
 #endif
     return false;
   }
@@ -810,8 +828,16 @@ static bool serialreadChar()
 #ifdef SERIAL_STATS
     stats.bad_stop++;
 #endif
+#if DRONECAN_SUPPORT
+    sys_can_enable_IRQ();
+#endif
     return false;
   }
+
+  // re-enable CAN IRQs after byte is complete
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 
   // we got a good byte
   messagereceived = true;
@@ -857,6 +883,9 @@ static void serialwriteChar(uint8_t data)
 
 static void sendString(const uint8_t *data, int len)
 {
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
   setTransmit();
   for (int i = 0; i < len; i++) {
     serialwriteChar(data[i]);
@@ -864,6 +893,9 @@ static void sendString(const uint8_t *data, int len)
     delayMicroseconds(BITTIME);
   }
   setReceive();
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 }
 
 static void receiveBuffer()
