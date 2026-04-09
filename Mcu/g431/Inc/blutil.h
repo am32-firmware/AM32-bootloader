@@ -201,6 +201,12 @@ static inline void bl_led_off(void)
 {
   LL_GPIO_SetOutputPin(GPIOC, GPIO_PIN(LED_RED_PIN) | GPIO_PIN(LED_GREEN_PIN) | GPIO_PIN(LED_BLUE_PIN));
 }
+
+static inline void bl_led_red_on(void)
+{
+  LL_GPIO_ResetOutputPin(GPIOC, GPIO_PIN(LED_RED_PIN));
+  LL_GPIO_SetOutputPin(GPIOC, GPIO_PIN(LED_GREEN_PIN) | GPIO_PIN(LED_BLUE_PIN));
+}
 #endif // USE_RGB_LED
 
 /*

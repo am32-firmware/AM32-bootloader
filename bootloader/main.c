@@ -121,6 +121,7 @@ static uint16_t invalid_command;
 static inline void bl_led_init(void) {}
 static inline void bl_led_on(void) {}
 static inline void bl_led_off(void) {}
+static inline void bl_led_red_on(void) {}
 #endif
 
 #if DRONECAN_SUPPORT
@@ -271,11 +272,19 @@ static void serialwriteOneChar(uint8_t data);
 static uint16_t us_start;
 
 /*
-  blink all RGB LEDs at ~2.5Hz when stuck in bootloader
+  blink RGB LEDs when stuck in bootloader
+  - normal: blink all LEDs at ~2.5Hz
+  - error:  blink red only at ~2.5Hz
  */
 #ifdef USE_RGB_LED
 static uint16_t led_timer_start;
 static uint8_t led_blink_counter;
+static bool led_error_mode;
+
+static void __attribute__((unused)) bl_led_set_error(bool error)
+{
+  led_error_mode = error;
+}
 
 static void bl_led_update(void)
 {
@@ -286,7 +295,11 @@ static void bl_led_update(void)
   led_timer_start = now;
   led_blink_counter++;
   if (led_blink_counter & 0x08) {
-    bl_led_on();
+    if (led_error_mode) {
+      bl_led_red_on();
+    } else {
+      bl_led_on();
+    }
   } else {
     bl_led_off();
   }
@@ -356,6 +369,9 @@ static void jump()
 #if DRONECAN_SUPPORT
   if (!DroneCAN_boot_ok()) {
     invalid_command = 0;
+#ifdef USE_RGB_LED
+    bl_led_set_error(true);
+#endif
     return;
   }
 
@@ -1062,6 +1078,26 @@ int main(void)
 #endif
 
   checkForSignal();
+
+#if DRONECAN_SUPPORT
+  // if signal pin is being driven (e.g. DShot), tell DroneCAN
+  // so it doesn't block boot waiting for CAN ESCRawCommand
+  {
+    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
+    delayMicroseconds(500);
+    bool has_pin_signal = false;
+    for (int i = 0; i < 500; i++) {
+      if (!gpio_read(input_pin)) {
+        has_pin_signal = true;
+        break;
+      }
+      delayMicroseconds(10);
+    }
+    if (has_pin_signal) {
+      DroneCAN_set_have_signal();
+    }
+  }
+#endif
 
   gpio_mode_set_input(input_pin, GPIO_PULL_UP);
 
