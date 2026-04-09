@@ -252,3 +252,126 @@ void SystemInit()
 {
 }
 #endif // PORT_LETTER
+
+/*
+  Debug UART support - USART2 TX on PB3 AF7, DMA1 CH1
+  Lightweight output: no printf/vsnprintf to save flash
+ */
+#ifdef USE_DEBUG_UART
+
+#include <stm32g4xx_ll_usart.h>
+#include <stm32g4xx_ll_dma.h>
+#include <stm32g4xx_ll_dmamux.h>
+
+static inline void bl_debug_uart_init(void)
+{
+  // Enable clocks: GPIOB, USART2, DMA1
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_USART2);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMA1);
+  LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_DMAMUX1);
+
+  // PB3 as USART2_TX, AF7
+  LL_GPIO_SetPinMode(GPIOB, LL_GPIO_PIN_3, LL_GPIO_MODE_ALTERNATE);
+  LL_GPIO_SetPinSpeed(GPIOB, LL_GPIO_PIN_3, LL_GPIO_SPEED_FREQ_HIGH);
+  LL_GPIO_SetAFPin_0_7(GPIOB, LL_GPIO_PIN_3, LL_GPIO_AF_7);
+
+  // USART2: 115200 8N1
+  LL_USART_SetBaudRate(USART2, 160000000, LL_USART_PRESCALER_DIV1, LL_USART_OVERSAMPLING_16, 115200);
+  LL_USART_SetDataWidth(USART2, LL_USART_DATAWIDTH_8B);
+  LL_USART_SetStopBitsLength(USART2, LL_USART_STOPBITS_1);
+  LL_USART_SetParity(USART2, LL_USART_PARITY_NONE);
+  LL_USART_SetTransferDirection(USART2, LL_USART_DIRECTION_TX);
+  LL_USART_EnableDMAReq_TX(USART2);
+  LL_USART_Enable(USART2);
+
+  // DMA1 Channel 1 for USART2_TX
+  LL_DMA_SetPeriphRequest(DMA1, LL_DMA_CHANNEL_1, LL_DMAMUX_REQ_USART2_TX);
+  LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_1, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+  LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PRIORITY_LOW);
+  LL_DMA_SetMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MODE_NORMAL);
+  LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PERIPH_NOINCREMENT);
+  LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MEMORY_INCREMENT);
+  LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_PDATAALIGN_BYTE);
+  LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_1, LL_DMA_MDATAALIGN_BYTE);
+  LL_DMA_SetPeriphAddress(DMA1, LL_DMA_CHANNEL_1, (uint32_t)&USART2->TDR);
+}
+
+// wait for previous DMA transfer to complete, then send new data
+static inline void bl_debug_send(const char *data, uint32_t len)
+{
+  if (len == 0) return;
+  // wait for any previous transfer
+  while (LL_DMA_IsEnabledChannel(DMA1, LL_DMA_CHANNEL_1)) {
+    if (LL_DMA_IsActiveFlag_TC1(DMA1)) {
+      LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_1);
+      LL_DMA_ClearFlag_TC1(DMA1);
+      break;
+    }
+  }
+  LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_1, (uint32_t)data);
+  LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_1, len);
+  LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_1);
+}
+
+static inline uint32_t bl_strlen(const char *s)
+{
+  uint32_t n = 0;
+  while (s[n]) n++;
+  return n;
+}
+
+// print a string (blocking wait for previous transfer)
+static inline void bl_debug_print(const char *msg)
+{
+  bl_debug_send(msg, bl_strlen(msg));
+}
+
+// print a uint32 in decimal
+static inline void bl_debug_print_u32(const char *label, uint32_t val)
+{
+  static char buf[32];
+  uint32_t pos = 0;
+  // copy label
+  for (uint32_t i = 0; label[i] && pos < sizeof(buf)-12; i++) {
+    buf[pos++] = label[i];
+  }
+  // convert value to decimal (reverse then swap)
+  if (val == 0) {
+    buf[pos++] = '0';
+  } else {
+    uint32_t start = pos;
+    while (val > 0 && pos < sizeof(buf)-2) {
+      buf[pos++] = '0' + (val % 10);
+      val /= 10;
+    }
+    // reverse the digits
+    for (uint32_t i = start, j = pos-1; i < j; i++, j--) {
+      char tmp = buf[i]; buf[i] = buf[j]; buf[j] = tmp;
+    }
+  }
+  buf[pos++] = '\r';
+  buf[pos++] = '\n';
+  bl_debug_send(buf, pos);
+}
+
+// print a uint32 in hex
+static inline void bl_debug_print_hex(const char *label, uint32_t val)
+{
+  static char buf[32];
+  uint32_t pos = 0;
+  const char hex[] = "0123456789ABCDEF";
+  for (uint32_t i = 0; label[i] && pos < sizeof(buf)-12; i++) {
+    buf[pos++] = label[i];
+  }
+  buf[pos++] = '0';
+  buf[pos++] = 'x';
+  for (int i = 28; i >= 0; i -= 4) {
+    buf[pos++] = hex[(val >> i) & 0xF];
+  }
+  buf[pos++] = '\r';
+  buf[pos++] = '\n';
+  bl_debug_send(buf, pos);
+}
+
+#endif // USE_DEBUG_UART

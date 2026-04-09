@@ -124,6 +124,14 @@ static inline void bl_led_off(void) {}
 static inline void bl_led_red_on(void) {}
 #endif
 
+// default no-op debug UART functions if not provided by blutil.h
+#ifndef USE_DEBUG_UART
+static inline void bl_debug_uart_init(void) {}
+static inline void bl_debug_print(const char *msg) { (void)msg; }
+static inline void bl_debug_print_u32(const char *label, uint32_t val) { (void)label; (void)val; }
+static inline void bl_debug_print_hex(const char *label, uint32_t val) { (void)label; (void)val; }
+#endif
+
 #if DRONECAN_SUPPORT
 #include "DroneCAN/DroneCAN.h"
 #include "DroneCAN/sys_can.h"
@@ -338,6 +346,7 @@ static void jump()
   uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
 #endif
   if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
+    bl_debug_print_hex("jump: eeprom not programmed, byte0=", value);
     invalid_command = 0;
     return;
   }
@@ -348,9 +357,13 @@ static void jump()
    */
   const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
   const uint32_t ram_start = 0x20000000;
-  const uint32_t ram_limit_kb = 64;
+#ifndef RAM_LIMIT_KB
+#define RAM_LIMIT_KB 64
+#endif
+  const uint32_t ram_limit_kb = RAM_LIMIT_KB;
   const uint32_t ram_end = ram_start+ram_limit_kb*1024;
   if (app[0] < ram_start || app[0] > ram_end) {
+    bl_debug_print_hex("jump: bad stack ptr=", app[0]);
     invalid_command = 0;
     return;
   }
@@ -361,6 +374,7 @@ static void jump()
   if (app[1] < APPLICATION_ADDRESS || app[1] > APPLICATION_ADDRESS+flash_limit_kb*1024) {
     // outside a 256k range, really unlikely to be a valid
     // application, don't jump
+    bl_debug_print_hex("jump: bad entry point=", app[1]);
     invalid_command = 0;
     return;
   }
@@ -368,6 +382,7 @@ static void jump()
 
 #if DRONECAN_SUPPORT
   if (!DroneCAN_boot_ok()) {
+    bl_debug_print("jump: DroneCAN_boot_ok failed\r\n");
     invalid_command = 0;
 #ifdef USE_RGB_LED
     bl_led_set_error(true);
@@ -375,6 +390,7 @@ static void jump()
     return;
   }
 
+  bl_debug_print("jump: booting app via CAN\r\n");
   sys_can_disable_IRQ();
 #endif
 
@@ -961,9 +977,13 @@ static void checkForSignal()
   if (low_pin_count > low_pin_count_threshold) {		// pulled low & majority stayed low - jump to application
 #if CHECK_SOFTWARE_RESET
     if (!bl_was_software_reset()) {
+      bl_debug_print("signal: pin held low, booting app\r\n");
       jump();
+    } else {
+      bl_debug_print("signal: pin low but software reset, staying\r\n");
     }
 #else
+    bl_debug_print("signal: pin held low, booting app\r\n");
     jump();
 #endif
   }
@@ -981,6 +1001,7 @@ static void checkForSignal()
     delayMicroseconds(10);
   }
   if (low_pin_count == 0) {
+    bl_debug_print("signal: pin pulled high, staying in BL\r\n");
     return;		// pulled high & never low in history - stay in bootloader only
   }
 
@@ -999,8 +1020,10 @@ static void checkForSignal()
   }
 
   if (low_pin_count > 0) {
+    bl_debug_print("signal: pin floating, booting app\r\n");
     jump();		// floating & low at least once - jump to application
   }
+  bl_debug_print("signal: pin not driven, staying in BL\r\n");
 }
 
 #ifdef BOOTLOADER_TEST_CLOCK
@@ -1066,6 +1089,8 @@ int main(void)
   bl_timer_init();
   bl_gpio_init();
   bl_led_init();
+  bl_debug_uart_init();
+  bl_debug_print("\r\nARKG4 BL start\r\n");
 
 #ifdef BOOTLOADER_TEST_CLOCK
   test_clock();
@@ -1094,7 +1119,10 @@ int main(void)
       delayMicroseconds(10);
     }
     if (has_pin_signal) {
+      bl_debug_print("CAN: input pin signal detected (DShot?)\r\n");
       DroneCAN_set_have_signal();
+    } else {
+      bl_debug_print("CAN: no input pin signal, need CAN ESCRawCommand\r\n");
     }
   }
 #endif
@@ -1109,14 +1137,18 @@ int main(void)
   update_EEPROM();
 #endif
 
+  bl_debug_print("entering main loop\r\n");
+
   while (1) {
     receiveBuffer();
 
     if (invalid_command > 100) {
+      bl_debug_print_u32("jump: invalid_command=", invalid_command);
       jump();
     }
 #if DRONECAN_SUPPORT
     if (DroneCAN_update()) {
+      bl_debug_print("jump: DroneCAN requested boot\r\n");
       jump();
     }
 #endif

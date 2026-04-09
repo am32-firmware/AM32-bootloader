@@ -26,7 +26,9 @@ CFLAGS_$(MCU) += \
 	-D$(PART) \
 	-DMCU_G431 \
 	-DUSE_FULL_LL_DRIVER \
-	-DPREFETCH_ENABLE=1
+	-DPREFETCH_ENABLE=1 \
+	-DBOARD_FLASH_SIZE=128 \
+	-DRAM_LIMIT_KB=112
 
 # RGB LED on PC6 (red), PC7 (green), PC8 (blue), active low
 CFLAGS_$(MCU) += \
@@ -51,7 +53,8 @@ CFLAGS_DRONECAN_$(MCU) += \
 	-Ibootloader/DroneCAN \
 	-Ibootloader/DroneCAN/libcanard \
 	-Ibootloader/DroneCAN/dsdl_generated/include \
-	-UAM32_MCU -DAM32_MCU=\"G431\"
+	-UAM32_MCU -DAM32_MCU=\"G431\" \
+	-DUSE_DEBUG_UART
 
 # main Makefile hardcodes CFLAGS_DRONECAN_L431 for CAN builds
 CFLAGS_DRONECAN_L431 ?= $(CFLAGS_DRONECAN_$(MCU))
