@@ -29,4 +29,4 @@ CFLAGS_$(MCU) += \
 SRC_$(MCU)_BL := $(foreach dir,$(SRC_BASE_DIR_$(MCU)),$(wildcard $(dir)/*.[cs])) \
 	$(wildcard $(HAL_FOLDER_$(MCU))/Src/*.c)
 
-BOOTLOADER_PINS_$(MCU) = PB2
+BOOTLOADER_PINS_$(MCU) = PB2 PC6
