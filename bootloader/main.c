@@ -103,6 +103,11 @@
 #define input_port        GPIOB
 #define PIN_NUMBER        2
 #define PORT_LETTER       1
+#elif defined(USE_PC6)
+#define input_pin         GPIO_PIN(6)
+#define input_port        GPIOC
+#define PIN_NUMBER        6
+#define PORT_LETTER       2
 #else
 #error "Bootloader comms pin not defined"
 #endif
