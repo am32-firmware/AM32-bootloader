@@ -210,7 +210,10 @@ ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
 BLU_BUILDS := $(BLU_BUILDS) $(BLU_TARGET)
 endef
 
-$(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(BOOTLOADER_PINS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
+# choose per-MCU pin override if set, otherwise the global BOOTLOADER_PINS
+pins_for_build = $(if $(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS))
+
+$(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(call pins_for_build,$(BUILD)),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
 
 bootloaders: $(ALL_BUILDS)
 
