@@ -31,14 +31,15 @@
 //#define BOOTLOADER_TEST_BKUP
 
 // use this to blink PB15 for GPIO test
-//#define BOOTLOADER_TEST_PB15_BLINK
+#define BOOTLOADER_TEST_PB15_BLINK
 
 // enable software debug UART output on PB2 (TX) and PB1 (RX)
-#if defined(USE_PB4)
+// #if defined(USE_PB4)
+// #define DEBUG_UART_PB2_PB1 1
+// #else
+// #define DEBUG_UART_PB2_PB1 0
+// #endif
 #define DEBUG_UART_PB2_PB1 1
-#else
-#define DEBUG_UART_PB2_PB1 0
-#endif
 
 // when there is no app fw yet, disable jump()
 //#define DISABLE_JUMP
@@ -233,6 +234,7 @@ static void sendString(const uint8_t data[], int len);
 static void receiveBuffer();
 static void serialwriteChar(uint8_t data);
 static void serialwriteOneChar(uint8_t data);
+static void serialwriteMessageOneChar(const char *msg);
 
 #if DEBUG_UART_PB2_PB1
 static void debug_uart_init(void);
@@ -412,6 +414,15 @@ static void serialwriteOneChar(uint8_t c)
   setTransmit();
   serialwriteChar(c);
   setReceive();
+}
+
+static void serialwriteMessageOneChar(const char *msg)
+{
+  while (*msg != '\0') {
+    serialwriteOneChar((uint8_t)*msg);
+    delayMicroseconds(BITTIME);
+    msg++;
+  }
 }
 
 static void send_ACK()
@@ -1017,11 +1028,12 @@ static void test_pb15_blink(void)
   const uint16_t blink_pin = GPIO_PIN(15);
   gpio_mode_set_output(blink_pin, GPIO_OUTPUT_PUSH_PULL);
 
-  while (true) {
+  for (int i = 0; i < 5; i++) {
+  // while (true) {
     gpio_set(blink_pin);
-    delayMicroseconds(50000);
+    for (int i = 0; i < 10; i++) delayMicroseconds(10000);
     gpio_clear(blink_pin);
-    delayMicroseconds(50000);
+    for (int i = 0; i < 10; i++) delayMicroseconds(10000);
   }
 }
 #endif // BOOTLOADER_TEST_PB15_BLINK
@@ -1032,10 +1044,9 @@ int main(void)
   bl_timer_init();
   bl_gpio_init();
 
-#if DEBUG_UART_PB2_PB1
-  debug_uart_init();
-  debug_uart_write_str("bootloader start\r\n");
-#endif
+  // Emit a startup banner over the one-wire input pin path.
+  setTransmit();
+  serialwriteMessageOneChar("BOOT\r\n");
 
 #ifdef BOOTLOADER_TEST_CLOCK
   test_clock();
@@ -1048,6 +1059,10 @@ int main(void)
 #endif
 #ifdef BOOTLOADER_TEST_PB15_BLINK
   test_pb15_blink();
+#endif
+#if DEBUG_UART_PB2_PB1
+  debug_uart_init();
+  debug_uart_write_str("bootloader start\r\n");
 #endif
 
   checkForSignal();
@@ -1064,9 +1079,6 @@ int main(void)
 
   while (1) {
     receiveBuffer();
-#ifdef DEBUG_UART_PB2_PB1
-    debug_uart_write_str("This message\r\n");
-#endif
     if (invalid_command > 100) {
       jump();
     }
