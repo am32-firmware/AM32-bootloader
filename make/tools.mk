@@ -4,6 +4,17 @@
 #
 ###############################################################
 
+ifeq ($(MSYSTEM),UCRT64)
+OSDIR:=windows
+ARM_SDK_PREFIX:=tools/windows/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-
+CP:=cp
+DSEP:=/
+NUL:=/dev/null
+MKDIR:=mkdir
+RM:=rm
+CUT:=cut
+FGREP:=fgrep
+else
 
 ifeq ($(OS),Windows_NT)
 OSDIR:=windows
@@ -43,6 +54,7 @@ MKDIR:=mkdir
 RM:=rm
 CUT:=cut
 FGREP:=fgrep
+endif
 endif
 endif
 
