@@ -22,7 +22,7 @@
 
 #define GPIO_OUTPUT_PUSH_PULL 3	//This variable is unused for MCXA153 but needed to build main.c
 
-#define GPIO_PIN(n) (1U<<(n))
+#define GPIO_PIN(n) (n)
 #define input_GPIO ((GPIO_Type*)(GPIO0_BASE+(0x1000*PORT_LETTER)))
 
 // Link STM GPIO and PORT to NXP ones
