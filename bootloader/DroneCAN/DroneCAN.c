@@ -65,6 +65,11 @@ static struct {
 
 static bool have_raw_command;
 
+void DroneCAN_set_have_signal(void)
+{
+  have_raw_command = true;
+}
+
 // some convenience macros
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
@@ -844,10 +849,12 @@ bool DroneCAN_boot_ok(void)
 {
   if (fwupdate.node_id != 0) {
     // in fw update
+    bl_debug_print("boot_ok: in fw update\r\n");
     return false;
   }
   if ((get_rtc_backup_register(0) & 0xFFFFU) == RTC_BKUP0_FWUPDATE) {
     // waiting for firmware update
+    bl_debug_print("boot_ok: RTC flag waiting for fw update\r\n");
     node_status.vendor_specific_status_code = FAIL_REASON_IN_UPDATE;
     return false;
   }
@@ -859,14 +866,17 @@ bool DroneCAN_boot_ok(void)
   const uint8_t *fw_base = (const uint8_t *)MAIN_FW_START_ADDR;
   struct app_signature *appsig = memmem(fw_base, app_max_len, sig, sizeof(sig));
   if (appsig == NULL || (((uint32_t)appsig) & 3) != 0) {
+    bl_debug_print("boot_ok: no app signature found\r\n");
     set_reason(FAIL_REASON_NO_APP_SIG, "no app signature");
     return false;
   }
   if (appsig->fwlen > app_max_len) {
+    bl_debug_print_hex("boot_ok: bad app length=", appsig->fwlen);
     set_reason(FAIL_REASON_BAD_LENGTH_APP, "bad app length");
     return false;
   }
   if (memcmp(AM32_MCU, appsig->mcu, strlen(AM32_MCU)) != 0) {
+    bl_debug_print("boot_ok: bad board type\r\n");
     set_reason(FAIL_REASON_BAD_BOARD_ID, "bad board type");
     return false;
   }
@@ -877,16 +887,22 @@ bool DroneCAN_boot_ok(void)
   const uint32_t crc2 = crc32(appsigend, appsig->fwlen - (uint32_t)(appsigend - fw_base));
   if (appsig->crc1 != crc1 ||
       appsig->crc2 != crc2) {
+    bl_debug_print_hex("boot_ok: bad CRC1 exp=", appsig->crc1);
+    bl_debug_print_hex("boot_ok: bad CRC1 got=", crc1);
+    bl_debug_print_hex("boot_ok: bad CRC2 exp=", appsig->crc2);
+    bl_debug_print_hex("boot_ok: bad CRC2 got=", crc2);
     set_reason(FAIL_REASON_BAD_CRC, "bad firmware CRC");
     return false;
   }
 #endif
 
   if (!have_raw_command) {
+    bl_debug_print("boot_ok: no signal (need ESCRawCommand or DShot)\r\n");
     set_reason(FAIL_REASON_BAD_CRC, "no signal");
     return false;
   }
 
+  bl_debug_print("boot_ok: checks passed\r\n");
   node_status.vendor_specific_status_code = CHECK_FW_OK;
 
   const uint8_t eeprom_magic = *(uint8_t*)(EEPROM_START_ADD);

@@ -116,6 +116,22 @@ static uint16_t invalid_command;
 
 #include <blutil.h>
 
+// default no-op LED functions if not provided by blutil.h
+#ifndef USE_RGB_LED
+static inline void bl_led_init(void) {}
+static inline void bl_led_on(void) {}
+static inline void bl_led_off(void) {}
+static inline void bl_led_red_on(void) {}
+#endif
+
+// default no-op debug UART functions if not provided by blutil.h
+#ifndef USE_DEBUG_UART
+static inline void bl_debug_uart_init(void) {}
+static inline void bl_debug_print(const char *msg) { (void)msg; }
+static inline void bl_debug_print_u32(const char *label, uint32_t val) { (void)label; (void)val; }
+static inline void bl_debug_print_hex(const char *label, uint32_t val) { (void)label; (void)val; }
+#endif
+
 #if DRONECAN_SUPPORT
 #include "DroneCAN/DroneCAN.h"
 #include "DroneCAN/sys_can.h"
@@ -263,6 +279,41 @@ static void serialwriteOneChar(uint8_t data);
 // used for timing bytes
 static uint16_t us_start;
 
+/*
+  blink RGB LEDs when stuck in bootloader
+  - normal: blink all LEDs at ~2.5Hz
+  - error:  blink red only at ~2.5Hz
+ */
+#ifdef USE_RGB_LED
+static uint16_t led_timer_start;
+static uint8_t led_blink_counter;
+static bool led_error_mode;
+
+static void __attribute__((unused)) bl_led_set_error(bool error)
+{
+  led_error_mode = error;
+}
+
+static void bl_led_update(void)
+{
+  const uint16_t now = bl_timer_us();
+  if ((uint16_t)(now - led_timer_start) < 25000U) {
+    return;
+  }
+  led_timer_start = now;
+  led_blink_counter++;
+  if (led_blink_counter & 0x08) {
+    if (led_error_mode) {
+      bl_led_red_on();
+    } else {
+      bl_led_on();
+    }
+  } else {
+    bl_led_off();
+  }
+}
+#endif
+
 static void bl_timer_reset(void)
 {
   us_start = bl_timer_us();
@@ -295,6 +346,7 @@ static void jump()
   uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
 #endif
   if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
+    bl_debug_print_hex("jump: eeprom not programmed, byte0=", value);
     invalid_command = 0;
     return;
   }
@@ -305,9 +357,13 @@ static void jump()
    */
   const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
   const uint32_t ram_start = 0x20000000;
-  const uint32_t ram_limit_kb = 64;
+#ifndef RAM_LIMIT_KB
+#define RAM_LIMIT_KB 64
+#endif
+  const uint32_t ram_limit_kb = RAM_LIMIT_KB;
   const uint32_t ram_end = ram_start+ram_limit_kb*1024;
   if (app[0] < ram_start || app[0] > ram_end) {
+    bl_debug_print_hex("jump: bad stack ptr=", app[0]);
     invalid_command = 0;
     return;
   }
@@ -318,6 +374,7 @@ static void jump()
   if (app[1] < APPLICATION_ADDRESS || app[1] > APPLICATION_ADDRESS+flash_limit_kb*1024) {
     // outside a 256k range, really unlikely to be a valid
     // application, don't jump
+    bl_debug_print_hex("jump: bad entry point=", app[1]);
     invalid_command = 0;
     return;
   }
@@ -325,13 +382,19 @@ static void jump()
 
 #if DRONECAN_SUPPORT
   if (!DroneCAN_boot_ok()) {
+    bl_debug_print("jump: DroneCAN_boot_ok failed\r\n");
     invalid_command = 0;
+#ifdef USE_RGB_LED
+    bl_led_set_error(true);
+#endif
     return;
   }
 
+  bl_debug_print("jump: booting app via CAN\r\n");
   sys_can_disable_IRQ();
 #endif
 
+  bl_led_off();
   jump_to_application();
 #endif
 }
@@ -389,31 +452,41 @@ static void setTransmit()
 
 static void serialwriteOneChar(uint8_t c)
 {
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
   setTransmit();
   serialwriteChar(c);
   setReceive();
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 }
 
 static void send_ACK()
 {
+  bl_debug_print("tx: ACK\r\n");
   serialwriteOneChar(0x30);             // good ack!
   invalid_command = 0;
 }
 
 static void send_BAD_ACK()
 {
+  bl_debug_print("tx: BAD_ACK\r\n");
   serialwriteOneChar(0xC1);                // bad command message.
   invalid_command++;
 }
 
 static void send_BAD_CRC_ACK()
 {
+  bl_debug_print("tx: BAD_CRC\r\n");
   serialwriteOneChar(0xC2);                // bad command message.
   invalid_command++;
 }
 
 static void sendDeviceInfo()
 {
+  bl_debug_print("tx: deviceInfo\r\n");
   sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
   initialized = true;
 }
@@ -693,22 +766,35 @@ static bool serialreadChar()
   // now we need to wait for the start bit leading edge, which is low
   bl_timer_reset();
   while (gpio_read(input_pin)) {
-    if (bl_timer_elapsed() > 5*BITTIME) {
+    uint16_t elapsed = bl_timer_elapsed();
+    if (messagereceived && elapsed > 5*BITTIME) {
+      // we've been waiting too long, don't allow for long gaps
+      // between bytes
+#ifdef SERIAL_STATS
+      stats.no_start++;
+#endif
+      return false;
+    }
 #if DRONECAN_SUPPORT
+    // Check DroneCAN every ~50ms when waiting for first byte.
+    // DroneCAN_boot_ok() scans flash (~2-5ms per call), so we
+    // rate-limit to avoid blocking serial start-bit detection.
+    if (!messagereceived && elapsed > 50000) {
       if (DroneCAN_update()) {
         jump();
       }
-#endif
-      if (messagereceived) {
-        // we've been waiting too long, don't allow for long gaps
-        // between bytes
-#ifdef SERIAL_STATS
-        stats.no_start++;
-#endif
-        return false;
-      }
+      bl_timer_reset();
     }
+#endif
+#ifdef USE_RGB_LED
+    bl_led_update();
+#endif
   }
+
+  // start bit detected - disable CAN IRQs to protect bit-banged timing
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
 
   // wait to get the center of bit time. We want to sample at the
   // middle of each bit
@@ -718,6 +804,9 @@ static bool serialreadChar()
     // which should still be low
 #ifdef SERIAL_STATS
     stats.bad_start++;
+#endif
+#if DRONECAN_SUPPORT
+    sys_can_enable_IRQ();
 #endif
     return false;
   }
@@ -739,8 +828,16 @@ static bool serialreadChar()
 #ifdef SERIAL_STATS
     stats.bad_stop++;
 #endif
+#if DRONECAN_SUPPORT
+    sys_can_enable_IRQ();
+#endif
     return false;
   }
+
+  // re-enable CAN IRQs after byte is complete
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 
   // we got a good byte
   messagereceived = true;
@@ -786,6 +883,9 @@ static void serialwriteChar(uint8_t data)
 
 static void sendString(const uint8_t *data, int len)
 {
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
   setTransmit();
   for (int i = 0; i < len; i++) {
     serialwriteChar(data[i]);
@@ -793,6 +893,9 @@ static void sendString(const uint8_t *data, int len)
     delayMicroseconds(BITTIME);
   }
   setReceive();
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 }
 
 static void receiveBuffer()
@@ -906,9 +1009,13 @@ static void checkForSignal()
   if (low_pin_count > low_pin_count_threshold) {		// pulled low & majority stayed low - jump to application
 #if CHECK_SOFTWARE_RESET
     if (!bl_was_software_reset()) {
+      bl_debug_print("signal: pin held low, booting app\r\n");
       jump();
+    } else {
+      bl_debug_print("signal: pin low but software reset, staying\r\n");
     }
 #else
+    bl_debug_print("signal: pin held low, booting app\r\n");
     jump();
 #endif
   }
@@ -926,6 +1033,7 @@ static void checkForSignal()
     delayMicroseconds(10);
   }
   if (low_pin_count == 0) {
+    bl_debug_print("signal: pin pulled high, staying in BL\r\n");
     return;		// pulled high & never low in history - stay in bootloader only
   }
 
@@ -944,8 +1052,10 @@ static void checkForSignal()
   }
 
   if (low_pin_count > 0) {
+    bl_debug_print("signal: pin floating, booting app\r\n");
     jump();		// floating & low at least once - jump to application
   }
+  bl_debug_print("signal: pin not driven, staying in BL\r\n");
 }
 
 #ifdef BOOTLOADER_TEST_CLOCK
@@ -1010,6 +1120,9 @@ int main(void)
   bl_clock_config();
   bl_timer_init();
   bl_gpio_init();
+  bl_led_init();
+  bl_debug_uart_init();
+  bl_debug_print("\r\nARKG4 BL start\r\n");
 
 #ifdef BOOTLOADER_TEST_CLOCK
   test_clock();
@@ -1023,6 +1136,29 @@ int main(void)
 
   checkForSignal();
 
+#if DRONECAN_SUPPORT
+  // if signal pin is being driven (e.g. DShot), tell DroneCAN
+  // so it doesn't block boot waiting for CAN ESCRawCommand
+  {
+    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
+    delayMicroseconds(500);
+    bool has_pin_signal = false;
+    for (int i = 0; i < 500; i++) {
+      if (!gpio_read(input_pin)) {
+        has_pin_signal = true;
+        break;
+      }
+      delayMicroseconds(10);
+    }
+    if (has_pin_signal) {
+      bl_debug_print("CAN: input pin signal detected (DShot?)\r\n");
+      DroneCAN_set_have_signal();
+    } else {
+      bl_debug_print("CAN: no input pin signal, need CAN ESCRawCommand\r\n");
+    }
+  }
+#endif
+
   gpio_mode_set_input(input_pin, GPIO_PULL_UP);
 
 #ifdef USE_ADC_INPUT  // go right to application
@@ -1033,14 +1169,18 @@ int main(void)
   update_EEPROM();
 #endif
 
+  bl_debug_print("entering main loop\r\n");
+
   while (1) {
     receiveBuffer();
 
     if (invalid_command > 100) {
+      bl_debug_print_u32("jump: invalid_command=", invalid_command);
       jump();
     }
 #if DRONECAN_SUPPORT
     if (DroneCAN_update()) {
+      bl_debug_print("jump: DroneCAN requested boot\r\n");
       jump();
     }
 #endif

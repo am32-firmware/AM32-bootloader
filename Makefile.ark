@@ -1,0 +1,18 @@
+# Makefile.ark - build bootloader for ARK G4 ESC
+#
+# Usage:
+#   make -f Makefile.ark                  # build ARK G4 bootloaders
+#   make -f Makefile.ark clean            # clean build artifacts
+
+ARK_MCU_BUILDS := ARKG4 ARKG4_CAN
+ARK_PINS := PB4
+
+# forward all targets to the main Makefile with overrides
+%:
+	$(MAKE) -f Makefile MCU_BUILDS="$(ARK_MCU_BUILDS)" BOOTLOADER_PINS="$(ARK_PINS)" $@
+
+all:
+	$(MAKE) -f Makefile MCU_BUILDS="$(ARK_MCU_BUILDS)" BOOTLOADER_PINS="$(ARK_PINS)"
+
+.PHONY: all
+.DEFAULT_GOAL := all
