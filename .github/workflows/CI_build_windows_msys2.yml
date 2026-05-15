@@ -1,0 +1,38 @@
+name: CI Build Windows MSYS2 UCRT64
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: 'windows-latest'
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSYS2 UCRT64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            unzip
+            tar
+            git
+
+      - name: Build CI
+        run: |
+          make arm_sdk_install
+          make -j8
+
+      - name: Archive build
+        uses: actions/upload-artifact@v4
+        with:
+          name: AM32-bootloader-msys2
+          path: |
+            obj/*.hex
+          retention-days: 7
