@@ -62,6 +62,8 @@
 #endif
 
 #ifndef FIRMWARE_RELATIVE_START
+// note: DRONECAN_SUPPORT is always defined (0 or 1) by the build, so test its
+// value rather than defined(), to match the convention used elsewhere
 #if defined(MCXA153) || DRONECAN_SUPPORT
 #define FIRMWARE_RELATIVE_START 0x4000
 #else
@@ -174,8 +176,11 @@ static uint16_t invalid_command;
   a bootloader protocol version, sent as byte 8 in the deviceInfo
   this should change when the configurator applications need to know
   about a changed feature set in the bootloader
+
+  v2: magic flash addresses (ADDRESS_MAGIC_EEPROM, ADDRESS_MAGIC_FILE_NAME) supported
+  v3: supports ADDRESS_MAGIC_DEVINFO
  */
-#define BOOTLOADER_PROTOCOL_VERSION 2
+#define BOOTLOADER_PROTOCOL_VERSION 3
 
 /*
   the devinfo structure tells the configuration client our pin code,
@@ -187,14 +192,40 @@ static uint16_t invalid_command;
 #define DEVINFO_MAGIC1 0x5925e3da
 #define DEVINFO_MAGIC2 0x4eb863d9
 
-static const struct {
+static const struct __attribute__((packed)) {
   uint32_t magic1;
   uint32_t magic2;
+  /*
+    deviceInfo bytes: '4','7','1', pin code, flash size code, 0x06, 0x06,
+    protocol version, 0x30
+   */
   const uint8_t deviceInfo[9];
+  /*
+    for (protocol version >= 3) we have additional information which can be fetched via ADDRESS_MAGIC_DEVINFO
+  */
+  uint8_t length;
+  uint8_t address_shift; // this is 2 on some MCUs
+  /*
+    the following uint16_t start addresses are the addresses that need
+    to be passed to CMD_SET_ADDRESS to get each of the respective
+    areas. Note that these are shifted addresses if address_shift is
+    non-zero. This keeps the values within the limitation of the 16
+    bit address in the protocol
+  */
+  uint16_t firmware_start;
+  uint16_t filename_start;
+  uint16_t eeprom_start;
+  uint16_t tune_start;
 } devinfo __attribute__((section(".devinfo"))) = {
   .magic1 = DEVINFO_MAGIC1,
   .magic2 = DEVINFO_MAGIC2,
-  .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,BOOTLOADER_PROTOCOL_VERSION,0x30}
+  .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,BOOTLOADER_PROTOCOL_VERSION,0x30},
+  sizeof(devinfo),
+  ADDRESS_SHIFT,
+  (uint16_t)(FIRMWARE_RELATIVE_START >> ADDRESS_SHIFT), // firmware_start
+  (uint16_t)((EEPROM_START_ADD - 32) >> ADDRESS_SHIFT), // filename_start
+  (uint16_t)(EEPROM_START_ADD >> ADDRESS_SHIFT), // eeprom_start
+  (uint16_t)((EEPROM_START_ADD + 48U) >> ADDRESS_SHIFT) // tune_start
 };
 
 typedef void (*pFunction)(void);
@@ -213,6 +244,16 @@ typedef void (*pFunction)(void);
 
 // magic address for continue transfer from last read
 #define ADDRESS_MAGIC_CONTINUE 0x22
+
+/*
+  magic address that maps to the devinfo structure in flash, so a
+  configuration client can READ the full deviceInfo (including the protocol
+  version and firmware start) even over a 4-way passthrough that only forwards
+  a short signature in the InitFlash reply. The read returns magic1, magic2
+  then the deviceInfo bytes, so the client can confirm support via the magic
+  values. Supported for BOOTLOADER_PROTOCOL_VERSION 3 and later.
+ */
+#define ADDRESS_MAGIC_DEVINFO 0x23
 
 
 #define CMD_RUN             0x00
@@ -554,6 +595,11 @@ static void decodeInput()
     } else if (address == ADDRESS_MAGIC_CONTINUE) {
       // allow easy continue from last address, for breaking up eeprom into multiple small reads
       address = continue_address;
+    } else if (address == ADDRESS_MAGIC_DEVINFO) {
+      // config app has requested the devinfo structure (magic1, magic2,
+      // deviceInfo). Lets the client read the protocol version and firmware
+      // start over a 4-way link that doesn't forward the full deviceInfo.
+      address = (uint32_t)(uintptr_t)&devinfo;
     } else if (address < 1024) {
       // other addresses below 1024 are reserved for future magic values
       send_BAD_ACK();
