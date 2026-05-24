@@ -65,6 +65,11 @@ static struct {
 
 static bool have_raw_command;
 
+void DroneCAN_set_have_signal(void)
+{
+  have_raw_command = true;
+}
+
 // some convenience macros
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))

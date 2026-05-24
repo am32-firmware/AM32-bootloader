@@ -234,6 +234,13 @@ static bool messagereceived;
 static int cmd;
 static int received;
 static bool initialized;
+/*
+  set once a configuration client has connected (asked for deviceInfo). While
+  set we stop polling DroneCAN, because DroneCAN_boot_ok() does a multi-ms
+  crc32 over the whole firmware that blocks the bit-banged serial and corrupts
+  4-way reads. A config session always ends in a reset, which clears this.
+ */
+static bool bl_serial_active;
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static uint8_t rxbyte;
@@ -389,9 +396,15 @@ static void setTransmit()
 
 static void serialwriteOneChar(uint8_t c)
 {
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
   setTransmit();
   serialwriteChar(c);
   setReceive();
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 }
 
 static void send_ACK()
@@ -416,6 +429,9 @@ static void sendDeviceInfo()
 {
   sendString(devinfo.deviceInfo,sizeof(devinfo.deviceInfo));
   initialized = true;
+  // a config client is connected; stop DroneCAN polling so its firmware-CRC
+  // scan can't block the bit-banged serial during this session
+  bl_serial_active = true;
 }
 
 static bool checkAddressWritable(uint32_t address)
@@ -693,22 +709,32 @@ static bool serialreadChar()
   // now we need to wait for the start bit leading edge, which is low
   bl_timer_reset();
   while (gpio_read(input_pin)) {
-    if (bl_timer_elapsed() > 5*BITTIME) {
+    uint16_t elapsed = bl_timer_elapsed();
+    if (messagereceived && elapsed > 5*BITTIME) {
+      // we've been waiting too long, don't allow for long gaps
+      // between bytes
+#ifdef SERIAL_STATS
+      stats.no_start++;
+#endif
+      return false;
+    }
 #if DRONECAN_SUPPORT
+    // Check DroneCAN every ~50ms when waiting for first byte.
+    // DroneCAN_boot_ok() scans flash (~2-5ms per call), so we
+    // rate-limit to avoid blocking serial start-bit detection.
+    if (!bl_serial_active && !messagereceived && elapsed > 50000) {
       if (DroneCAN_update()) {
         jump();
       }
-#endif
-      if (messagereceived) {
-        // we've been waiting too long, don't allow for long gaps
-        // between bytes
-#ifdef SERIAL_STATS
-        stats.no_start++;
-#endif
-        return false;
-      }
+      bl_timer_reset();
     }
+#endif
   }
+
+  // start bit detected - disable CAN IRQs to protect bit-banged timing
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
 
   // wait to get the center of bit time. We want to sample at the
   // middle of each bit
@@ -718,6 +744,9 @@ static bool serialreadChar()
     // which should still be low
 #ifdef SERIAL_STATS
     stats.bad_start++;
+#endif
+#if DRONECAN_SUPPORT
+    sys_can_enable_IRQ();
 #endif
     return false;
   }
@@ -739,8 +768,16 @@ static bool serialreadChar()
 #ifdef SERIAL_STATS
     stats.bad_stop++;
 #endif
+#if DRONECAN_SUPPORT
+    sys_can_enable_IRQ();
+#endif
     return false;
   }
+
+  // re-enable CAN IRQs after byte is complete
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 
   // we got a good byte
   messagereceived = true;
@@ -786,6 +823,9 @@ static void serialwriteChar(uint8_t data)
 
 static void sendString(const uint8_t *data, int len)
 {
+#if DRONECAN_SUPPORT
+  sys_can_disable_IRQ();
+#endif
   setTransmit();
   for (int i = 0; i < len; i++) {
     serialwriteChar(data[i]);
@@ -793,6 +833,9 @@ static void sendString(const uint8_t *data, int len)
     delayMicroseconds(BITTIME);
   }
   setReceive();
+#if DRONECAN_SUPPORT
+  sys_can_enable_IRQ();
+#endif
 }
 
 static void receiveBuffer()
@@ -1021,6 +1064,32 @@ int main(void)
   test_rtc_backup();
 #endif
 
+#if DRONECAN_SUPPORT
+  /*
+    If the signal pin is being driven (e.g. DShot), tell DroneCAN so its
+    DroneCAN_boot_ok() will accept the jump. This MUST run before
+    checkForSignal(): checkForSignal()'s "floating + low at least once" path
+    calls jump() unconditionally, and jump() rejects via DroneCAN_boot_ok()
+    when have_raw_command is false. So if we set the flag here first, a
+    DShot-only boot reaches jump_to_application() instead of bouncing.
+  */
+  {
+    gpio_mode_set_input(input_pin, GPIO_PULL_UP);
+    delayMicroseconds(500);
+    bool has_pin_signal = false;
+    for (int i = 0; i < 500; i++) {
+      if (!gpio_read(input_pin)) {
+        has_pin_signal = true;
+        break;
+      }
+      delayMicroseconds(10);
+    }
+    if (has_pin_signal) {
+      DroneCAN_set_have_signal();
+    }
+  }
+#endif
+
   checkForSignal();
 
   gpio_mode_set_input(input_pin, GPIO_PULL_UP);
@@ -1040,7 +1109,7 @@ int main(void)
       jump();
     }
 #if DRONECAN_SUPPORT
-    if (DroneCAN_update()) {
+    if (!bl_serial_active && DroneCAN_update()) {
       jump();
     }
 #endif
