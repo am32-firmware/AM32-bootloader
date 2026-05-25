@@ -382,6 +382,15 @@ static void can_init(void)
 void sys_can_init(void)
 {
   // Setup CAN RX and TX pins
+  // map main-firmware-style CAN pin names (from Inc/targets.h) onto FDCAN_*
+#if defined(CAN_RX_PORT) && !defined(FDCAN_RX_PORT)
+#define FDCAN_RX_PORT CAN_RX_PORT
+#define FDCAN_RX_PIN  CAN_RX_PIN
+#endif
+#if defined(CAN_TX_PORT) && !defined(FDCAN_TX_PORT)
+#define FDCAN_TX_PORT CAN_TX_PORT
+#define FDCAN_TX_PIN  CAN_TX_PIN
+#endif
 #ifndef FDCAN_RX_PORT
 #define FDCAN_RX_PORT GPIOA
 #define FDCAN_RX_PIN  LL_GPIO_PIN_11
