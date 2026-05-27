@@ -319,12 +319,38 @@ static int cmd;
 static int received;
 static bool initialized;
 /*
-  set once a configuration client has connected (asked for deviceInfo). While
+  set whenever a validated (good-CRC, known) 4-way command is processed. While
   set we stop polling DroneCAN, because DroneCAN_boot_ok() does a multi-ms
   crc32 over the whole firmware that blocks the bit-banged serial and corrupts
-  4-way reads. A config session always ends in a reset, which clears this.
+  4-way reads. Marking on every good command (not just the deviceInfo probe)
+  protects even a client that skips the deviceInfo handshake from the first
+  command onward. The start-bit-wait loop clears this after
+  BL_SERIAL_IDLE_THRESHOLD ticks (~10s) without a good command, so DroneCAN
+  polling resumes quickly once the client goes away - no reset required. See
+  serialreadChar(), mark_serial_active() and BL_SERIAL_IDLE_THRESHOLD.
  */
 static bool bl_serial_active;
+#if DRONECAN_SUPPORT
+// counter of consecutive ~50ms idle ticks while bl_serial_active is set.
+// Zeroed by mark_serial_active() on every good 4-way command and by any
+// received byte, so it only climbs during true post-session silence.
+static uint16_t bl_serial_idle_count;
+// ~10 seconds of silence after the last good 4-way command before we assume the
+// client has gone and resume DroneCAN polling. Short enough for fast recovery,
+// long enough to bridge the gaps between commands in an active session.
+// 200 ticks * 50ms = 10s.
+#define BL_SERIAL_IDLE_THRESHOLD 200U
+#endif
+
+// mark that a validated 4-way command was just handled: suppress DroneCAN
+// polling for this config session and restart the idle timer.
+static void mark_serial_active(void)
+{
+  bl_serial_active = true;
+#if DRONECAN_SUPPORT
+  bl_serial_idle_count = 0;
+#endif
+}
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static uint8_t rxbyte;
@@ -502,6 +528,8 @@ static void send_ACK()
 {
   serialwriteOneChar(0x30);             // good ack!
   invalid_command = 0;
+  // an ACK is only sent for a validated command; keep DroneCAN suppressed
+  mark_serial_active();
 }
 
 static void send_BAD_ACK()
@@ -522,7 +550,7 @@ static void sendDeviceInfo()
   initialized = true;
   // a config client is connected; stop DroneCAN polling so its firmware-CRC
   // scan can't block the bit-banged serial during this session
-  bl_serial_active = true;
+  mark_serial_active();
 }
 
 static bool checkAddressWritable(uint32_t address)
@@ -674,6 +702,7 @@ static void decodeInput()
 
       return;
     }
+    mark_serial_active();
 
     // no ack with command set buffer;
     if (rxBuffer[2] == 0x01) {
@@ -695,6 +724,7 @@ static void decodeInput()
 
       return;
     }
+    mark_serial_active();
 
     serialwriteOneChar(0xC1);                // bad command message.
     return;
@@ -729,6 +759,7 @@ static void decodeInput()
 
       return;
     }
+    mark_serial_active();
 
     if (address == 0) {
       // must send SET_ADDRESS first
@@ -818,8 +849,21 @@ static bool serialreadChar()
     // Check DroneCAN every ~50ms when waiting for first byte.
     // DroneCAN_boot_ok() scans flash (~2-5ms per call), so we
     // rate-limit to avoid blocking serial start-bit detection.
-    if (!bl_serial_active && !messagereceived && elapsed > 50000) {
-      if (DroneCAN_update()) {
+    if (!messagereceived && elapsed > 50000) {
+      if (bl_serial_active) {
+        /*
+          a config client is mid-session: a good 4-way command set
+          bl_serial_active (see mark_serial_active()) so DroneCAN polling
+          stays suppressed. The idle counter is zeroed on every good command
+          and any received byte, so it only climbs during real silence. After
+          BL_SERIAL_IDLE_THRESHOLD ticks (~10s) without a command we assume the
+          client is gone and resume polling - no reset required.
+         */
+        if (++bl_serial_idle_count >= BL_SERIAL_IDLE_THRESHOLD) {
+          bl_serial_active = false;
+          bl_serial_idle_count = 0;
+        }
+      } else if (DroneCAN_update()) {
         jump();
       }
       bl_timer_reset();
@@ -880,6 +924,9 @@ static bool serialreadChar()
 
   // we got a good byte
   messagereceived = true;
+#if DRONECAN_SUPPORT
+  bl_serial_idle_count = 0;
+#endif
   receiveByte = rxbyte;
 #ifdef SERIAL_STATS
   stats.good++;
