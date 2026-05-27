@@ -322,9 +322,26 @@ static bool initialized;
   set once a configuration client has connected (asked for deviceInfo). While
   set we stop polling DroneCAN, because DroneCAN_boot_ok() does a multi-ms
   crc32 over the whole firmware that blocks the bit-banged serial and corrupts
-  4-way reads. A config session always ends in a reset, which clears this.
+  4-way reads. A well-behaved config session ends in a reset; if the client
+  disconnects without resetting, the start-bit-wait loop clears this after
+  ~5 minutes of *complete* serial silence so DroneCAN polling resumes. Any
+  received byte resets the idle counter, so a long but interactive session
+  (user reading settings, typing values) stays alive; see serialreadChar()
+  and BL_SERIAL_IDLE_THRESHOLD. A future protocol revision could add an
+  explicit "session end" command for instant recovery on cooperative clients.
  */
 static bool bl_serial_active;
+#if DRONECAN_SUPPORT
+// counter of consecutive ~50ms idle ticks while bl_serial_active is set.
+// Used to recover from a client that probed deviceInfo then walked away.
+static uint16_t bl_serial_idle_count;
+// ~5 minutes of complete serial silence before we assume the client is gone.
+// Picked to be much longer than any realistic user pause inside an active
+// configurator session (reading a settings page, typing a value, taking a
+// phone call) while still ensuring abandoned bootloaders eventually resume
+// DroneCAN polling. 6000 ticks * 50ms = 300s.
+#define BL_SERIAL_IDLE_THRESHOLD 6000U
+#endif
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static uint8_t rxbyte;
@@ -818,8 +835,24 @@ static bool serialreadChar()
     // Check DroneCAN every ~50ms when waiting for first byte.
     // DroneCAN_boot_ok() scans flash (~2-5ms per call), so we
     // rate-limit to avoid blocking serial start-bit detection.
-    if (!bl_serial_active && !messagereceived && elapsed > 50000) {
-      if (DroneCAN_update()) {
+    if (!messagereceived && elapsed > 50000) {
+      if (bl_serial_active) {
+        /*
+          a config client previously probed deviceInfo (which set
+          bl_serial_active to suppress DroneCAN polling) and then went
+          quiet. We don't want the bootloader to livelock here with
+          DroneCAN suppressed if the client walked away without
+          resetting, but we also must not undo a real session that the
+          user has paused on (a settings page, mid-edit). After
+          BL_SERIAL_IDLE_THRESHOLD ticks (~5 min) of *complete* serial
+          silence — i.e. the idle counter has not been reset by any
+          received byte — assume the client is gone and resume polling.
+         */
+        if (++bl_serial_idle_count >= BL_SERIAL_IDLE_THRESHOLD) {
+          bl_serial_active = false;
+          bl_serial_idle_count = 0;
+        }
+      } else if (DroneCAN_update()) {
         jump();
       }
       bl_timer_reset();
@@ -880,6 +913,9 @@ static bool serialreadChar()
 
   // we got a good byte
   messagereceived = true;
+#if DRONECAN_SUPPORT
+  bl_serial_idle_count = 0;
+#endif
   receiveByte = rxbyte;
 #ifdef SERIAL_STATS
   stats.good++;
