@@ -156,3 +156,41 @@
 // AT32 CAN pins are fixed at PA11/PA12 (CAN1_GMUX_0000) in the F415 driver.
 // Main firmware block has no CAN_TERM_PIN, so we don't set one here either.
 #endif
+
+#ifdef VIMDRONES_L431_CAN
+#define FILE_NAME "VIMDRONES_L431_CAN" // parser: MCU=L431, CAN build
+#define TARGET_TAG VIML4               // -> AM32_L431_BOOTLOADER_VIML4_CAN
+#define USE_PA2                        // from HARDWARE_GROUP_L4_B (INPUT_PIN PA2)
+
+// bxCAN pins are fixed at PA11/PA12 in the L431 bootloader CAN driver.
+// Main firmware block has no oscillator or CAN_TERM_PIN settings; the
+// bootloader defaults to HSI16 (the main firmware does too via the
+// fall-through path in Mcu/l431/Src/peripherals.c).
+#endif
+
+#ifdef VIMDRONES_NANO_L431_CAN
+#define FILE_NAME "VIMDRONES_NANO_L431_CAN" // parser: MCU=L431, CAN build
+#define TARGET_TAG VIMNANO                  // -> AM32_L431_BOOTLOADER_VIMNANO_CAN
+#define USE_PA2                             // from HARDWARE_GROUP_L4_B (INPUT_PIN PA2)
+
+// bxCAN pins are fixed at PA11/PA12 in the L431 bootloader CAN driver.
+
+// 24 MHz external HSE clock (main firmware doesn't set USE_HSE_BYPASS, so
+// the bootloader default applies = bypass mode = external clock source).
+#define USE_HSE
+#undef  HSE_VALUE
+#define HSE_VALUE 24000000
+#endif
+
+#ifdef VIMDRONES_S50_L431_CAN
+#define FILE_NAME "VIMDRONES_S50_L431_CAN" // parser: MCU=L431, CAN build
+#define TARGET_TAG VIMS50                  // -> AM32_L431_BOOTLOADER_VIMS50_CAN
+#define USE_PA2                            // from HARDWARE_GROUP_L4_B (INPUT_PIN PA2)
+
+// bxCAN pins are fixed at PA11/PA12 in the L431 bootloader CAN driver.
+
+// 24 MHz external HSE clock (same as VIMDRONES_NANO, see above).
+#define USE_HSE
+#undef  HSE_VALUE
+#define HSE_VALUE 24000000
+#endif
