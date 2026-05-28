@@ -455,5 +455,32 @@ void set_rtc_backup_register(uint8_t idx, uint32_t value)
   bkp[idx] = value;
 }
 
+/*
+  drive a static port/pin as an output, used for CAN bus termination.
+  Ported from ../AM32/Src/DroneCAN/sys_can_stm32.c. The L431 only needs
+  GPIOA / GPIOB for the boards currently shipping CAN_TERM_PIN; other
+  ports drop through silently to match the main firmware's helper.
+ */
+void setup_portpin(uint16_t portpin, bool enable)
+{
+  const uint8_t port = portpin >> 8;
+  const uint8_t pin = portpin & 0xff;
+  const uint32_t pinshift = 1U << pin;
+  GPIO_TypeDef *pport = port == 0 ? GPIOA : GPIOB;
+
+  if (enable) {
+    LL_GPIO_SetOutputPin(pport, pinshift);
+  } else {
+    LL_GPIO_ResetOutputPin(pport, pinshift);
+  }
+
+  LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = pinshift;
+  GPIO_InitStruct.Mode = LL_GPIO_MODE_OUTPUT;
+  GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+  GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
+  LL_GPIO_Init(pport, &GPIO_InitStruct);
+}
+
 #endif // DRONECAN_SUPPORT && defined(MCU_L431)
 
