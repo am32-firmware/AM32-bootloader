@@ -1233,6 +1233,11 @@ int main(void)
       DroneCAN_set_have_signal();
     }
   }
+
+  // bring CAN RX live before checkForSignal() so the no-CAN fallback window
+  // (NONCAN_FALLBACK_MS) observes the bus from boot. Return value ignored: it
+  // is false this early (no raw command, deadline not yet reached).
+  (void)DroneCAN_update();
 #endif
 
   checkForSignal();
