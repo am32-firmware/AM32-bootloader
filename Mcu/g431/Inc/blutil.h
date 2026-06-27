@@ -176,6 +176,69 @@ static inline void bl_gpio_init(void)
 }
 
 /*
+  RGB LED support, driven by per-board RED/GREEN/BLUE_PORT/_PIN from
+  Inc/targets.h (active low, open drain). Pins are LL_GPIO_PIN_x masks.
+ */
+#ifdef USE_RGB_LED
+static inline void bl_led_port_clock(GPIO_TypeDef *port)
+{
+#ifdef GPIOA
+  if (port == GPIOA) { LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA); return; }
+#endif
+#ifdef GPIOB
+  if (port == GPIOB) { LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB); return; }
+#endif
+#ifdef GPIOC
+  if (port == GPIOC) { LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOC); return; }
+#endif
+#ifdef GPIOD
+  if (port == GPIOD) { LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOD); return; }
+#endif
+#ifdef GPIOF
+  if (port == GPIOF) { LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOF); return; }
+#endif
+}
+
+static inline void bl_led_init(void)
+{
+  bl_led_port_clock(RED_PORT);
+  bl_led_port_clock(GREEN_PORT);
+  bl_led_port_clock(BLUE_PORT);
+  LL_GPIO_SetPinMode(RED_PORT, RED_PIN, LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(RED_PORT, RED_PIN, LL_GPIO_OUTPUT_OPENDRAIN);
+  LL_GPIO_SetPinMode(GREEN_PORT, GREEN_PIN, LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(GREEN_PORT, GREEN_PIN, LL_GPIO_OUTPUT_OPENDRAIN);
+  LL_GPIO_SetPinMode(BLUE_PORT, BLUE_PIN, LL_GPIO_MODE_OUTPUT);
+  LL_GPIO_SetPinOutputType(BLUE_PORT, BLUE_PIN, LL_GPIO_OUTPUT_OPENDRAIN);
+  // LEDs off (open drain high = hi-Z = off)
+  LL_GPIO_SetOutputPin(RED_PORT, RED_PIN);
+  LL_GPIO_SetOutputPin(GREEN_PORT, GREEN_PIN);
+  LL_GPIO_SetOutputPin(BLUE_PORT, BLUE_PIN);
+}
+
+static inline void bl_led_on(void)
+{
+  LL_GPIO_ResetOutputPin(RED_PORT, RED_PIN);
+  LL_GPIO_ResetOutputPin(GREEN_PORT, GREEN_PIN);
+  LL_GPIO_ResetOutputPin(BLUE_PORT, BLUE_PIN);
+}
+
+static inline void bl_led_off(void)
+{
+  LL_GPIO_SetOutputPin(RED_PORT, RED_PIN);
+  LL_GPIO_SetOutputPin(GREEN_PORT, GREEN_PIN);
+  LL_GPIO_SetOutputPin(BLUE_PORT, BLUE_PIN);
+}
+
+static inline void bl_led_red_on(void)
+{
+  LL_GPIO_ResetOutputPin(RED_PORT, RED_PIN);
+  LL_GPIO_SetOutputPin(GREEN_PORT, GREEN_PIN);
+  LL_GPIO_SetOutputPin(BLUE_PORT, BLUE_PIN);
+}
+#endif // USE_RGB_LED
+
+/*
   return true if the MCU booted under a software reset
  */
 static inline bool bl_was_software_reset(void)

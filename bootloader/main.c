@@ -118,6 +118,49 @@ static uint16_t invalid_command;
 
 #include <blutil.h>
 
+// default no-op LED functions if not provided by blutil.h (USE_RGB_LED)
+#ifndef USE_RGB_LED
+static inline void bl_led_init(void) {}
+static inline void bl_led_on(void) {}
+static inline void bl_led_off(void) {}
+static inline void bl_led_red_on(void) {}
+#endif
+
+#ifdef USE_RGB_LED
+/*
+  blink RGB LEDs while stuck in the bootloader
+  - normal: blink all LEDs at ~2.5Hz
+  - error:  blink red only
+ */
+static uint16_t led_timer_start;
+static uint8_t led_blink_counter;
+static bool led_error_mode;
+
+static void __attribute__((unused)) bl_led_set_error(bool error)
+{
+  led_error_mode = error;
+}
+
+static void bl_led_update(void)
+{
+  const uint16_t now = bl_timer_us();
+  if ((uint16_t)(now - led_timer_start) < 25000U) {
+    return;
+  }
+  led_timer_start = now;
+  led_blink_counter++;
+  if (led_blink_counter & 0x08) {
+    if (led_error_mode) {
+      bl_led_red_on();
+    } else {
+      bl_led_on();
+    }
+  } else {
+    bl_led_off();
+  }
+}
+#endif // USE_RGB_LED
+
 #if DRONECAN_SUPPORT
 #include "DroneCAN/DroneCAN.h"
 #include "DroneCAN/sys_can.h"
@@ -353,7 +396,10 @@ static void jump()
    */
   const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
   const uint32_t ram_start = 0x20000000;
-  const uint32_t ram_limit_kb = 64;
+#ifndef RAM_LIMIT_KB
+#define RAM_LIMIT_KB 64
+#endif
+  const uint32_t ram_limit_kb = RAM_LIMIT_KB;
   const uint32_t ram_end = ram_start+ram_limit_kb*1024;
   if (app[0] < ram_start || app[0] > ram_end) {
     invalid_command = 0;
@@ -374,12 +420,16 @@ static void jump()
 #if DRONECAN_SUPPORT
   if (!DroneCAN_boot_ok()) {
     invalid_command = 0;
+#ifdef USE_RGB_LED
+    bl_led_set_error(true);
+#endif
     return;
   }
 
   sys_can_disable_IRQ();
 #endif
 
+  bl_led_off();
   jump_to_application();
 #endif
 }
@@ -775,6 +825,9 @@ static bool serialreadChar()
       bl_timer_reset();
     }
 #endif
+#ifdef USE_RGB_LED
+    bl_led_update();
+#endif
   }
 
   // start bit detected - disable CAN IRQs to protect bit-banged timing
@@ -1099,6 +1152,7 @@ int main(void)
   bl_clock_config();
   bl_timer_init();
   bl_gpio_init();
+  bl_led_init();
 
 #ifdef BOOTLOADER_TEST_CLOCK
   test_clock();
