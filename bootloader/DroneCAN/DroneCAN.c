@@ -53,6 +53,15 @@ static uint8_t canard_memory_pool[CANARD_POOL_SIZE];
 #endif
 
 /*
+  the EEPROM region we preserve on a single-byte update. This must cover
+  the highest parameter offset we touch (currently ESC_INDEX at byte 177)
+  and matches the main firmware's EEPROM_MAX_SIZE so we don't truncate
+  state the application has stored above the default_settings block.
+  Must be a multiple of the flash word granularity (8 on L431/G431).
+ */
+#define EEPROM_PRESERVE_SIZE 1024
+
+/*
   keep the state for firmware update
 */
 static struct {
@@ -211,6 +220,158 @@ static void can_print(const char *s)
 #else
 static inline void can_print(const char *s) { (void)s; }
 #endif
+
+/*
+  parameters the bootloader exposes via uavcan.protocol.param.GetSet. We
+  expose just the two CAN-binding parameters from the main firmware so a
+  user can rebind an ESC's node id or motor index without first booting
+  the application. The values live at the same EEPROM offsets the main
+  firmware writes them to (see ../AM32/Inc/eeprom.h::eepromBuffer.can).
+
+  default_value is what we report back when the raw EEPROM byte is
+  uninitialised (0xFF) or out of range; matches the main firmware's
+  defaults from load_settings() in ../AM32/Src/DroneCAN/DroneCAN.c.
+ */
+static const struct {
+  const char *name;
+  uint8_t min_value;
+  uint8_t max_value;
+  uint8_t default_value;
+  uint8_t eeprom_offset;
+} bl_parameters[] = {
+  { "CAN_NODE",  0, 127, 0, 176 },
+  { "ESC_INDEX", 0,  32, 0, 177 },
+};
+
+#define NUM_BL_PARAMS (sizeof(bl_parameters)/sizeof(bl_parameters[0]))
+
+/*
+  patch a single byte in the EEPROM page while preserving the rest.
+  STM32 flash is page-erase-then-program: save_flash_nolib() erases the
+  whole 2 KB page at EEPROM_START_ADD and writes back only the bytes we
+  hand it, so we have to copy out enough of the live page to cover every
+  application setting, modify the one byte, and write the lot back.
+  EEPROM_PRESERVE_SIZE matches the main firmware's EEPROM_MAX_SIZE.
+  Returns true on success.
+ */
+static bool set_eeprom_byte(uint16_t offset, uint8_t value)
+{
+  static uint8_t buf[EEPROM_PRESERVE_SIZE];
+  if (offset >= sizeof(buf)) {
+    return false;
+  }
+  memcpy(buf, (const void *)EEPROM_START_ADD, sizeof(buf));
+  if (buf[offset] == value) {
+    // nothing to do; avoid an unnecessary erase cycle.
+    return true;
+  }
+  buf[offset] = value;
+  return save_flash_nolib(buf, sizeof(buf), EEPROM_START_ADD);
+}
+
+/*
+  read the live (effective) value of a parameter from EEPROM, applying
+  the same default-and-clamp rules the main firmware's load_settings()
+  uses: an out-of-range raw byte (typically 0xFF on uninitialised EEPROM)
+  or an unset EEPROM magic produces the parameter's default_value, not
+  the raw 0xFF that confused the DroneCAN GUI tools.
+ */
+static uint8_t bl_param_get(uint8_t p_idx)
+{
+  const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+  const uint8_t raw = eeprom[bl_parameters[p_idx].eeprom_offset];
+  if (eeprom[0] != 0x01 ||
+      raw < bl_parameters[p_idx].min_value ||
+      raw > bl_parameters[p_idx].max_value) {
+    return bl_parameters[p_idx].default_value;
+  }
+  return raw;
+}
+
+/*
+  handle uavcan.protocol.param.GetSet request. Supports lookup by name
+  or by index; set is only honoured when the request carries a non-empty
+  name AND a non-empty integer value, matching the main firmware's
+  convention. Response carries the current value plus the parameter name,
+  default_value, min_value and max_value so the DroneCAN GUI tool can
+  validate user input.
+*/
+static void handle_param_GetSet(CanardInstance* ins, CanardRxTransfer* transfer)
+{
+  struct uavcan_protocol_param_GetSetRequest req;
+  if (uavcan_protocol_param_GetSetRequest_decode(transfer, &req)) {
+    return;
+  }
+
+  const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+  int p_idx = -1;
+
+  if (req.name.len != 0) {
+    for (uint8_t i = 0; i < NUM_BL_PARAMS; i++) {
+      const char *pname = bl_parameters[i].name;
+      const uint32_t plen = strlen(pname);
+      if (req.name.len == plen &&
+          memcmp(req.name.data, pname, plen) == 0) {
+        p_idx = (int)i;
+        break;
+      }
+    }
+  } else if (req.index < NUM_BL_PARAMS) {
+    p_idx = req.index;
+  }
+
+  // set path: only when caller passed a name and a non-empty integer value.
+  // Refuse if the EEPROM magic isn't set; we'd otherwise be writing into a
+  // page full of 0xFF and the application would treat the result as
+  // uninitialised on next boot anyway.
+  if (p_idx >= 0 && req.name.len != 0 &&
+      req.value.union_tag == UAVCAN_PROTOCOL_PARAM_VALUE_INTEGER_VALUE &&
+      eeprom[0] == 0x01) {
+    int64_t v = req.value.integer_value;
+    if (v < (int64_t)bl_parameters[p_idx].min_value) {
+      v = bl_parameters[p_idx].min_value;
+    }
+    if (v > (int64_t)bl_parameters[p_idx].max_value) {
+      v = bl_parameters[p_idx].max_value;
+    }
+    set_eeprom_byte(bl_parameters[p_idx].eeprom_offset, (uint8_t)v);
+  }
+
+  // build the response (current value, name, default/min/max).
+  struct uavcan_protocol_param_GetSetResponse pkt;
+  memset(&pkt, 0, sizeof(pkt));
+
+  if (p_idx >= 0) {
+    pkt.value.union_tag = UAVCAN_PROTOCOL_PARAM_VALUE_INTEGER_VALUE;
+    pkt.value.integer_value = bl_param_get((uint8_t)p_idx);
+
+    pkt.default_value.union_tag = UAVCAN_PROTOCOL_PARAM_VALUE_INTEGER_VALUE;
+    pkt.default_value.integer_value = bl_parameters[p_idx].default_value;
+
+    pkt.min_value.union_tag = UAVCAN_PROTOCOL_PARAM_NUMERICVALUE_INTEGER_VALUE;
+    pkt.min_value.integer_value = bl_parameters[p_idx].min_value;
+
+    pkt.max_value.union_tag = UAVCAN_PROTOCOL_PARAM_NUMERICVALUE_INTEGER_VALUE;
+    pkt.max_value.integer_value = bl_parameters[p_idx].max_value;
+
+    const char *pname = bl_parameters[p_idx].name;
+    pkt.name.len = strlen(pname);
+    memcpy(pkt.name.data, pname, pkt.name.len);
+  }
+
+  uint8_t buffer[UAVCAN_PROTOCOL_PARAM_GETSET_RESPONSE_MAX_SIZE];
+  uint16_t total_size = uavcan_protocol_param_GetSetResponse_encode(&pkt, buffer);
+
+  canardRequestOrRespond(ins,
+                         transfer->source_node_id,
+                         UAVCAN_PROTOCOL_PARAM_GETSET_SIGNATURE,
+                         UAVCAN_PROTOCOL_PARAM_GETSET_ID,
+                         &transfer->transfer_id,
+                         transfer->priority,
+                         CanardResponse,
+                         &buffer[0],
+                         total_size);
+}
 
 /*
   handle parameter executeopcode request
@@ -565,6 +726,10 @@ static void onTransferReceived(CanardInstance *ins, CanardRxTransfer *transfer)
       handle_param_ExecuteOpcode(ins, transfer);
       break;
     }
+    case UAVCAN_PROTOCOL_PARAM_GETSET_ID: {
+      handle_param_GetSet(ins, transfer);
+      break;
+    }
     }
   }
   if (transfer->transfer_type == CanardTransferTypeResponse) {
@@ -618,6 +783,10 @@ static bool shouldAcceptTransfer(const CanardInstance *ins,
     }
     case UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_ID: {
       *out_data_type_signature = UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_SIGNATURE;
+      return true;
+    }
+    case UAVCAN_PROTOCOL_PARAM_GETSET_ID: {
+      *out_data_type_signature = UAVCAN_PROTOCOL_PARAM_GETSET_SIGNATURE;
       return true;
     }
     }
