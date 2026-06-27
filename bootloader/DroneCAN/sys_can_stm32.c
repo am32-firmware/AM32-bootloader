@@ -61,6 +61,7 @@ typedef struct {
 /* CAN master control register */
 static uint32_t MCR_INRQ =            (1U << 0); /* Bit 0: Initialization Request */
 static uint32_t MCR_SLEEP =           (1U << 1); /* Bit 1: Sleep Mode Request */
+static uint32_t MCR_TXFP =            (1U << 2); /* Bit 2: Transmit FIFO Priority */
 static uint32_t MCR_AWUM =            (1U << 5); /* Bit 5: Automatic Wakeup Mode */
 static uint32_t MCR_ABOM =            (1U << 6); /* Bit 6: Automatic Bus-Off Management */
 
@@ -176,11 +177,16 @@ static bool can_send(const CanardCANFrame *frame)
 
 static void handleTxMailboxInterrupt(uint8_t mailbox_index, bool txok)
 {
-#if 0
-  // in the bootloader we don't do interrupt driven transmit, send
-  // happens from main loop only
+  (void)mailbox_index;
+  (void)txok;
+  /*
+    drain the next pending frame as a mailbox empties. Without this the canard
+    TX queue is only serviced from the main loop at ~20Hz, throttling multi-frame
+    responses and filling the memory pool. Safe wrt the main loop (its drains run
+    under disable/enable_IRQ) and wrt RX (RX/TX share NVIC priority, so they run
+    back-to-back, not preempting on the pool).
+   */
   DroneCAN_processTxQueue();
-#endif
 }
 
 static void pollErrorFlagsFromISR()
@@ -371,7 +377,20 @@ static void can_init(void)
   /*
    * Hardware initialization (the hardware has already confirmed initialization mode, see above)
    */
-  BXCAN->MCR = MCR_ABOM | MCR_AWUM | MCR_INRQ;  // RM page 648
+  /*
+    TXFP=1 puts the 3 TX mailboxes into FIFO order: hardware transmits
+    in the order frames were enqueued, regardless of CAN ID. Without
+    this, frames with equal IDs (everything inside a single multi-frame
+    DroneCAN transfer) would arbitrate by mailbox number, so a TX-IRQ
+    refilling mailbox 0 with the next-in-line frame could cause it to
+    transmit before the still-pending frames in mailboxes 1/2 -- which
+    corrupted the DroneCAN toggle bit and made multi-frame responses
+    unreadable to the GUI. canard_stm32 (used by the main firmware)
+    works around this with priority-inversion checks in its transmit
+    path, but the bootloader's can_send() doesn't have that, so we use
+    the hardware FIFO mode instead. RM page 648.
+   */
+  BXCAN->MCR = MCR_ABOM | MCR_AWUM | MCR_INRQ | MCR_TXFP;
 
   // timings assuming 80MHz clock
   const uint8_t sjw = 0;

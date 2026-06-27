@@ -177,7 +177,15 @@ static void handleRxInterrupt(uint8_t fifo_index)
 
 static void handleTxCompleteInterrupt(void)
 {
-  // Nothing to do in simple bootloader mode
+  /*
+    Drain the next pending frame as soon as a TX buffer empties; see
+    sys_can_stm32.c::handleTxMailboxInterrupt() for the rationale.
+    Without this the canard TX queue is only serviced from the main
+    loop's DroneCAN_update() at ~20 Hz, which throttles multi-frame
+    responses badly enough that pipelined GetSet fetches from
+    dronecan_gui_tool drop responses and time out.
+   */
+  DroneCAN_processTxQueue();
 }
 
 static void pollErrorFlagsFromISR(void)
