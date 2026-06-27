@@ -67,6 +67,14 @@ static struct {
 // volatile (especially with -flto cross-TU optimisation)
 static volatile bool have_raw_command;
 
+// no-CAN-cable fallback: behave like a non-CAN build when no CAN frame is
+// seen within NONCAN_FALLBACK_MS. can_seen is set RX-only; noncan_fallback
+// relaxes the boot gate once the deadline passes with no traffic.
+static volatile bool can_seen;
+static bool noncan_fallback;
+#define NONCAN_FALLBACK_MS 250
+#define DRONECAN_INPUT_TYPE 5   // mirrors DRONECAN_IN in AM32 Inc/common.h (EEPROM byte 46)
+
 void DroneCAN_set_have_signal(void)
 {
   have_raw_command = true;
@@ -711,6 +719,7 @@ void DroneCAN_receiveFrame(void)
 {
   CanardCANFrame rx_frame = {0};
   while (sys_can_receive(&rx_frame) > 0) {
+    can_seen = true;
     canardHandleRxFrame(&canard, &rx_frame, (uint64_t)micros32());
   }
 }
@@ -720,6 +729,7 @@ void DroneCAN_receiveFrame(void)
 */
 void DroneCAN_handleFrame(CanardCANFrame *frame)
 {
+  can_seen = true;
   canardHandleRxFrame(&canard, frame, (uint64_t)micros32());
 }
 
@@ -829,6 +839,33 @@ bool DroneCAN_update()
 
   DroneCAN_processTxQueue();
 
+  /*
+    arm the no-CAN fallback. Must run before the DNA early-return below (with no
+    cable the node never gets an ID, so that returns false forever). After
+    NONCAN_FALLBACK_MS with no raw command and no CAN seen, relax the boot gate
+    unless INPUT_SIGNAL_TYPE is DroneCAN. A blank EEPROM arms, but the
+    short-circuit below still refuses to boot it.
+   */
+  if (!have_raw_command && !noncan_fallback && !can_seen &&
+      millis32() > NONCAN_FALLBACK_MS) {
+    const uint8_t *ee = (const uint8_t *)EEPROM_START_ADD;
+    const bool wait_can = (ee[0] == 0x01 && ee[46] == DRONECAN_INPUT_TYPE);
+    if (!wait_can) {
+      noncan_fallback = true;
+    }
+  }
+  if (noncan_fallback && !can_seen) {
+    // fallen back and still no CAN: boot like a non-CAN build. Like the non-CAN
+    // build, refuse a blank/unprogrammed EEPROM (byte0 != 0x01) rather than let
+    // DroneCAN_boot_ok() seed defaults and boot it. If a CAN frame arrives
+    // later, can_seen vetoes this and DNA/CAN handling resumes below.
+    sys_can_enable_IRQ();
+    if (*(const uint8_t *)EEPROM_START_ADD != 0x01) {
+      return false;
+    }
+    return DroneCAN_boot_ok();
+  }
+
   // see if we are still doing DNA
   if (canardGetLocalNodeID(&canard) == CANARD_BROADCAST_NODE_ID) {
     // we're still waiting for a DNA allocation of our node ID
@@ -936,8 +973,11 @@ bool DroneCAN_boot_ok(void)
   }
 #endif
 
-  if (!have_raw_command) {
-    set_reason(FAIL_REASON_BAD_CRC, "no signal");
+  // waive the raw-command requirement under no-CAN fallback. The !can_seen
+  // re-check closes the late-frame race: a frame arriving after fallback armed
+  // re-blocks the boot and reverts to CAN behaviour.
+  if (!have_raw_command && !(noncan_fallback && !can_seen)) {
+    set_reason(FAIL_REASON_NO_SIGNAL, "no signal");
     return false;
   }
 
