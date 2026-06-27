@@ -95,9 +95,14 @@ void sys_can_init(void)
   can_baudrate_struct.bts2_size = CAN_BTS2_3TQ;
   can_baudrate_set(CAN1, &can_baudrate_struct);
 
-  /* can filter init */
+  /* can filter init.
+     filter_mode must be initialised explicitly; can_filter_init() reads it
+     in a switch with no guaranteed default. Mask mode with id=0/mask=0
+     means "accept all". Without LTO the uninitialised read was invisible;
+     LTO inlining exposes it as -Werror=maybe-uninitialized. */
   can_filter_init_type can_filter_init_struct;
   can_filter_init_struct.filter_activate_enable = TRUE;
+  can_filter_init_struct.filter_mode = CAN_FILTER_MODE_ID_MASK;
   can_filter_init_struct.filter_fifo = CAN_FILTER_FIFO0;
   can_filter_init_struct.filter_number = 0;
   can_filter_init_struct.filter_bit = CAN_FILTER_32BIT;
