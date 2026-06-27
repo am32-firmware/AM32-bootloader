@@ -36,6 +36,13 @@ endef
 
 MCU_TYPES := $(sort $(foreach mcu,$(MCU_BUILDS),$(call base_mcu,$(mcu))))
 
+# custom per-board targets defined in Inc/targets.h, parsed by make/parse_targets.py.
+# BOARD_TARGETS entries are "BUILD|TAG|BOARDDEFINE", e.g. G431_CAN|ARKG4|ARK_G431_CAN
+BOARD_TARGETS := $(shell python3 make/parse_targets.py builds)
+BOARD_MCUS := $(shell python3 make/parse_targets.py mcus)
+# make sure each custom board's per-MCU makefile gets included below
+MCU_TYPES := $(sort $(MCU_TYPES) $(BOARD_MCUS))
+
 # Function to include makefile for each MCU type
 define INCLUDE_MCU_MAKEFILES
 $(foreach MCU_TYPE,$(MCU_TYPES),$(eval include $(call lc,$(MCU_TYPE))makefile.mk))
@@ -49,6 +56,8 @@ LIBS := -lnosys
 CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math --specs=nosys.specs
 CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -ffunction-sections -funsigned-char
 CFLAGS_BASE += -Wall -Wextra -Wundef -Werror -Wno-unused-parameter
+# force-include per-board config; inert for builds with no board define
+CFLAGS_BASE += -include $(MAIN_INC_DIR)/targets.h
 
 CFLAGS_COMMON := $(CFLAGS_BASE)
 
@@ -138,6 +147,7 @@ BLU_BUILDS :=
 define CREATE_BOOTLOADER_TARGET
 $(eval BUILD := $(1))
 $(eval PIN := $(2))
+$(eval BOARD := $(3))
 $(eval MCU := $$(call base_mcu,$$(1)))
 $(eval EXTRA_CFLAGS := $(call get_cflags,$(1)))
 $(eval ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_BASENAME_VER,$(BUILD),$(PIN)).elf)
@@ -166,7 +176,7 @@ $(eval SRC_DRONECAN := $(if $(call has_can_suffix,$(1)),$(SRC_DRONECAN_$(MCU))))
 -include $(DEP_FILE)
 -include $(BLU_DEP_FILE)
 
-$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -DAM32_MCU=\"$(MCU)\" $$(CFLAGS_DRONECAN)
+$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -DAM32_MCU=\"$(MCU)\" $$(CFLAGS_DRONECAN)
 $(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
 $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 	$$(QUIET)echo building bootloader for $(BUILD) with pin $(PIN)
@@ -180,7 +190,7 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 $(H_FILE): $(BIN_FILE)
 	$$(QUIET)python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
 
-$(BLU_ELF_FILE): CFLAGS_BLU := -DAM32_MCU=\"$(MCU)\" $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
+$(BLU_ELF_FILE): CFLAGS_BLU := -DAM32_MCU=\"$(MCU)\" $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
 $(BLU_ELF_FILE): LDFLAGS_BLU := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xBLU_LDSCRIPT)
 $(BLU_ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BLU) $(H_FILE)
 	$$(QUIET)echo building bootloader updater for $(BUILD) with pin $(PIN)
@@ -220,6 +230,9 @@ endef
 pins_for_build = $(if $(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS))
 
 $(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(call pins_for_build,$(BUILD)),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
+
+# custom per-board targets from Inc/targets.h (BUILD|TAG|BOARDDEFINE)
+$(foreach B,$(BOARD_TARGETS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B))))))
 
 bootloaders: $(ALL_BUILDS)
 
