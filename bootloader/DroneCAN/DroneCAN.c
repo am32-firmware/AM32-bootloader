@@ -176,7 +176,11 @@ static uint32_t crc32(const uint8_t *buf, uint32_t size)
 }
 #endif
 
-// print to CAN LogMessage for debugging
+/*
+  print to CAN LogMessage for debugging. Compiled out unless DRONECAN_DEBUG;
+  the no-op inline stub lets the linker drop LogMessage_encode and the strings.
+ */
+#if DRONECAN_DEBUG
 static void can_print(const char *s)
 {
   struct uavcan_protocol_debug_LogMessage pkt;
@@ -196,6 +200,9 @@ static void can_print(const char *s)
                   CANARD_TRANSFER_PRIORITY_LOW,
                   buffer, len);
 }
+#else
+static inline void can_print(const char *s) { (void)s; }
+#endif
 
 /*
   handle parameter executeopcode request
