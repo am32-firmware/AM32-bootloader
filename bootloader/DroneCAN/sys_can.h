@@ -44,6 +44,14 @@ void sys_can_getUniqueID(uint8_t id[16]);
 void sys_can_init(void);
 
 /*
+  drive a static GPIO output (used for CAN bus termination). The portpin is
+  encoded with GPIO_PORT_PIN(portnum, pinnum) where portnum is 0=A,1=B,2=C.
+  Only defined for CAN builds; matches the same-named helper in the main AM32
+  firmware so the bootloader and firmware drive CAN_TERM_PIN identically.
+ */
+void setup_portpin(uint16_t portpin, bool enable);
+
+/*
   called from CAN IRQ indicating we may have a free TX slot
  */
 extern void DroneCAN_processTxQueue();

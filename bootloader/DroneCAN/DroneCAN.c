@@ -764,6 +764,26 @@ static void DroneCAN_Startup(void)
   // initialise low level CAN peripheral hardware
   sys_can_init();
 
+#ifdef CAN_TERM_PIN
+  /*
+    apply the CAN bus termination setting from the EEPROM. Byte 183 is
+    eepromBuffer.can.term_enable (declared in ../AM32/Inc/eeprom.h). Mirror the
+    main firmware's load_settings(): an out-of-[0,1]-range byte falls back to the
+    default. default_settings[] only covers the first 48 bytes, so on a
+    defaults-seeded or erased EEPROM byte 183 reads 0xff -> default 0 (disabled),
+    matching the main firmware's default.
+   */
+  {
+    const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+    uint8_t term = eeprom[183];
+    if (term > 1) {
+      term = 0; // out of range -> default (disabled)
+    }
+    const bool term_enable = (eeprom[0] == 1) && (term != 0);
+    setup_portpin(CAN_TERM_PIN, term_enable ? CAN_TERM_POLARITY : !CAN_TERM_POLARITY);
+  }
+#endif
+
 #if 0
   if (fwupdate.node_id != 0) {
     can_print("fwupdate startup");
