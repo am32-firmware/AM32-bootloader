@@ -93,41 +93,130 @@ static inline uint16_t bl_timer_us(void)
 }
 
 /*
-  initialise clocks
+  initialise clocks. Mirrors the oscillator choice in the main AM32 firmware's
+  Mcu/l431/Src/peripherals.c so per-board #define blocks (USE_HSE/USE_LSE/USE_MSI)
+  drive the bootloader and the application identically:
+
+    USE_HSE       external high-speed crystal/oscillator. HSE_VALUE must be
+                  8 / 16 / 24 MHz. USE_HSE_BYPASS=0 selects crystal, otherwise
+                  external oscillator.
+    USE_LSE       MSI clock disciplined by an external 32.768 kHz LSE; RTC
+                  also runs from LSE. USE_LSE_BYPASS=1 selects an external
+                  clock source instead of a crystal.
+    USE_MSI       free-running MSI (no LSE discipline).
+    (default)     HSI16, the no-external-oscillator path.
+
+  All branches converge on an 80 MHz PLL output.
  */
 static inline void bl_clock_config(void)
 {
   LL_FLASH_SetLatency(LL_FLASH_LATENCY_4);
-  while (LL_FLASH_GetLatency()!= LL_FLASH_LATENCY_4) ;
+  while (LL_FLASH_GetLatency() != LL_FLASH_LATENCY_4) ;
   LL_PWR_SetRegulVoltageScaling(LL_PWR_REGU_VOLTAGE_SCALE1);
-
   while (LL_PWR_IsActiveFlag_VOS() != 0) ;
-  LL_RCC_HSI_Enable();
-  LL_RCC_LSI_Enable();
 
-  /* Wait till MSI and LSI are ready */
-  while (LL_RCC_LSI_IsReady() != 1) ;
-  while (LL_RCC_HSI_IsReady() != 1) ;
+  // backup domain access is needed both to change the RTC clock source and
+  // to use the BKP registers for the bootloader <-> firmware handoff.
+  LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_PWR);
+  LL_PWR_EnableBkUpAccess();
 
-  LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSI);
-  LL_RCC_EnableRTC();
+#ifdef USE_HSE
+  /*
+    External high-speed crystal / oscillator. USE_HSE_BYPASS=0 selects
+    crystal mode; anything else selects bypass-from-external-oscillator.
+   */
+#if defined(USE_HSE_BYPASS) && (USE_HSE_BYPASS == 0)
+  LL_RCC_HSE_DisableBypass();
+#else
+  LL_RCC_HSE_EnableBypass();
+#endif
+  LL_RCC_HSE_Enable();
+  while (LL_RCC_HSE_IsReady() != 1) ;
+#if HSE_VALUE == 24000000
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSE, LL_RCC_PLLM_DIV_3, 20, LL_RCC_PLLR_DIV_2);
+#elif HSE_VALUE == 16000000
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSE, LL_RCC_PLLM_DIV_2, 20, LL_RCC_PLLR_DIV_2);
+#elif HSE_VALUE == 8000000
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSE, LL_RCC_PLLM_DIV_1, 20, LL_RCC_PLLR_DIV_2);
+#else
+#error "Unsupported HSE_VALUE"
+#endif
 
-  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSI, LL_RCC_PLLM_DIV_2, 20, LL_RCC_PLLR_DIV_2);
-  LL_RCC_PLL_EnableDomain_SYS();
-  LL_RCC_PLL_Enable();
+#elif defined(USE_LSE)
+  /*
+    LSE-disciplined MSI: a 32.768 kHz LSE drives the MSI's PLL-mode trim so
+    the MSI is precise enough for clock-sensitive peripherals. RTC also runs
+    from LSE. The PLL still sources from MSI (not from LSE directly).
 
+    The backup-domain reset and full LSE re-configuration are only safe on
+    cold boot. On warm boot (after the app has invoked NVIC_SystemReset for
+    a DroneCAN firmware-update handoff) the LSE is already running AND the
+    BKP registers carry the handoff magic + path that DroneCAN.c reads in
+    DroneCAN_Startup. Resetting the backup domain wipes that state and
+    breaks the OTA flow. Skip the reset/reconfigure path when LSE is
+    already ready: the app and bootloader want the same LSE configuration,
+    and we want to preserve whatever the app wrote to the BKP registers.
+   */
+  LL_RCC_MSI_Enable();
+  while (LL_RCC_MSI_IsReady() != 1) ;
+  LL_RCC_MSI_DisablePLLMode();
+  if (LL_RCC_LSE_IsReady() != 1) {
+    LL_RCC_ForceBackupDomainReset();
+    LL_RCC_ReleaseBackupDomainReset();
+    LL_RCC_LSE_SetDriveCapability(LL_RCC_LSEDRIVE_HIGH);
+    #if defined(USE_LSE_BYPASS) && USE_LSE_BYPASS
+      LL_RCC_LSE_EnableBypass();
+    #else
+      LL_RCC_LSE_DisableBypass();
+    #endif
+    LL_RCC_LSE_Enable();
+    while (LL_RCC_LSE_IsReady() != 1) ;
+    LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSE);
+    LL_RCC_EnableRTC();
+  }
+  LL_RCC_MSI_EnablePLLMode();
   LL_RCC_MSI_EnableRangeSelection();
   LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_6);
   LL_RCC_MSI_SetCalibTrimming(0);
   LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_MSI, LL_RCC_PLLM_DIV_1, 40, LL_RCC_PLLR_DIV_2);
+
+#elif defined(USE_MSI)
+  /*
+    Free-running MSI (no LSE discipline). Useful when neither LSE nor HSE
+    is wired but the MSI accuracy is acceptable.
+   */
+  LL_RCC_MSI_Enable();
+  while (LL_RCC_MSI_IsReady() != 1) ;
+  LL_RCC_MSI_EnableRangeSelection();
+  LL_RCC_MSI_SetRange(LL_RCC_MSIRANGE_6);
+  LL_RCC_MSI_SetCalibTrimming(0);
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_MSI, LL_RCC_PLLM_DIV_1, 40, LL_RCC_PLLR_DIV_2);
+
+#else
+  /*
+    Default: HSI16. The PLL produces 80 MHz from the internal 16 MHz HSI.
+   */
+  LL_RCC_HSI_Enable();
+  while (LL_RCC_HSI_IsReady() != 1) ;
+  LL_RCC_PLL_ConfigDomain_SYS(LL_RCC_PLLSOURCE_HSI, LL_RCC_PLLM_DIV_2, 20, LL_RCC_PLLR_DIV_2);
+#endif
+
+#ifndef USE_LSE
+  /*
+    Non-LSE paths still need the RTC running so the DroneCAN bootloader can
+    hand off via the BKP registers. LSI is the natural source there. Cheap
+    enough to enable unconditionally for non-CAN builds too.
+   */
+  LL_RCC_LSI_Enable();
+  while (LL_RCC_LSI_IsReady() != 1) ;
+  LL_RCC_SetRTCClockSource(LL_RCC_RTC_CLKSOURCE_LSI);
+  LL_RCC_EnableRTC();
+#endif
+
   LL_RCC_PLL_EnableDomain_SYS();
   LL_RCC_PLL_Enable();
-
-  /* Wait till PLL is ready */
   while (LL_RCC_PLL_IsReady() != 1) ;
   LL_RCC_SetSysClkSource(LL_RCC_SYS_CLKSOURCE_PLL);
-
-  /* Wait till System clock is ready */
   while (LL_RCC_GetSysClkSource() != LL_RCC_SYS_CLKSOURCE_STATUS_PLL) ;
 
   LL_RCC_SetAHBPrescaler(LL_RCC_SYSCLK_DIV_1);
