@@ -54,7 +54,8 @@ LIBS := -lnosys
 
 # Compiler options
 CFLAGS_BASE := -fsingle-precision-constant -fomit-frame-pointer -ffast-math --specs=nosys.specs
-CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -ffunction-sections -funsigned-char
+CFLAGS_BASE += -I$(MAIN_INC_DIR) -g3 -Os -ffunction-sections -fdata-sections -funsigned-char
+CFLAGS_BASE += -flto
 CFLAGS_BASE += -Wall -Wextra -Wundef -Werror -Wno-unused-parameter
 # force-include per-board config; inert for builds with no board define
 CFLAGS_BASE += -include $(MAIN_INC_DIR)/targets.h
@@ -62,7 +63,10 @@ CFLAGS_BASE += -include $(MAIN_INC_DIR)/targets.h
 CFLAGS_COMMON := $(CFLAGS_BASE)
 
 # Linker options
-LDFLAGS_COMMON := -specs=nano.specs $(LIBS) -Wl,--gc-sections -Wl,--print-memory-usage
+# -fdata-sections lets --gc-sections drop unused globals (companion to -ffunction-sections).
+# -flto enables link-time optimisation (cross-TU inlining + DCE); pass it on both
+#   the compile and link command lines so the linker gets the IR not raw object code.
+LDFLAGS_COMMON := -specs=nano.specs $(LIBS) -Wl,--gc-sections -Wl,--print-memory-usage -flto
 
 # configure some directories that are relative to wherever ROOT_DIR is located
 OBJ := obj
