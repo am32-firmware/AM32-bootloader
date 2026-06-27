@@ -132,47 +132,47 @@ static void handleRxInterrupt(uint8_t fifo_index)
   uint32_t get_index_mask = (fifo_index == 0) ? FDCAN_RXF0S_F0GI : FDCAN_RXF1S_F1GI;
   uint32_t get_index_shift = (fifo_index == 0) ? FDCAN_RXF0S_F0GI_SHIFT : FDCAN_RXF1S_F1GI_SHIFT;
   
-  // Check if FIFO has messages
-  if ((*fifo_status_reg & fifo_level_mask) == 0) {
-    return;
+  // Drain every queued frame. The FIFO new-message interrupt is not re-asserted
+  // for frames already queued, so reading only one per IRQ would delay the rest
+  // until the next frame arrives.
+  while ((*fifo_status_reg & fifo_level_mask) != 0) {
+    // Get the get index
+    uint32_t get_index = (*fifo_status_reg & get_index_mask) >> get_index_shift;
+
+    // Calculate address in message RAM
+    uint32_t rx_fifo_addr = (fifo_index == 0) ? MessageRam_RxFIFO0SA : MessageRam_RxFIFO1SA;
+    volatile RxMessageRAM *rx_mailbox = (volatile RxMessageRAM *)(rx_fifo_addr + (get_index * FDCAN_FRAME_BUFFER_SIZE * 4));
+
+    // Read the frame
+    CanardCANFrame frame = {};
+
+    uint32_t id_flags = rx_mailbox->id_flags;
+    if (id_flags & (1U << 30)) {
+      frame.id = (id_flags & MaskExtID) | CANARD_CAN_FRAME_EFF;
+    } else {
+      frame.id = (id_flags >> 18) & MaskStdID;
+    }
+
+    if (id_flags & (1U << 29)) {
+      frame.id |= CANARD_CAN_FRAME_RTR;
+    }
+
+    // Get DLC
+    uint32_t dlc = (rx_mailbox->dlc_timestamp >> 16) & 0xF;
+    frame.data_len = dlc;
+
+    // Copy data
+    uint32_t *data_ptr = (uint32_t *)frame.data;
+    for (int i = 0; i < 2; i++) {
+      data_ptr[i] = rx_mailbox->data[i];
+    }
+
+    // Acknowledge the read
+    *fifo_ack_reg = get_index;
+
+    // Process the frame
+    DroneCAN_handleFrame(&frame);
   }
-  
-  // Get the get index
-  uint32_t get_index = (*fifo_status_reg & get_index_mask) >> get_index_shift;
-  
-  // Calculate address in message RAM
-  uint32_t rx_fifo_addr = (fifo_index == 0) ? MessageRam_RxFIFO0SA : MessageRam_RxFIFO1SA;
-  volatile RxMessageRAM *rx_mailbox = (volatile RxMessageRAM *)(rx_fifo_addr + (get_index * FDCAN_FRAME_BUFFER_SIZE * 4));
-  
-  // Read the frame
-  CanardCANFrame frame = {};
-  
-  uint32_t id_flags = rx_mailbox->id_flags;
-  if (id_flags & (1U << 30)) {
-    frame.id = (id_flags & MaskExtID) | CANARD_CAN_FRAME_EFF;
-  } else {
-    frame.id = (id_flags >> 18) & MaskStdID;
-  }
-  
-  if (id_flags & (1U << 29)) {
-    frame.id |= CANARD_CAN_FRAME_RTR;
-  }
-  
-  // Get DLC
-  uint32_t dlc = (rx_mailbox->dlc_timestamp >> 16) & 0xF;
-  frame.data_len = dlc;
-  
-  // Copy data
-  uint32_t *data_ptr = (uint32_t *)frame.data;
-  for (int i = 0; i < 2; i++) {
-    data_ptr[i] = rx_mailbox->data[i];
-  }
-  
-  // Acknowledge the read
-  *fifo_ack_reg = get_index;
-  
-  // Process the frame
-  DroneCAN_handleFrame(&frame);
 }
 
 static void handleTxCompleteInterrupt(void)
@@ -280,9 +280,8 @@ void sys_can_enable_IRQ(void)
 */
 static bool waitForBitState(volatile uint32_t *reg, uint32_t mask, bool target_state)
 {
-  while (true) {
-    bool current_state = ((*reg) & mask) != 0;
-    if (current_state == target_state) {
+  for (volatile uint32_t tries = 0; tries < 1000000; tries++) {
+    if ((((*reg) & mask) != 0) == target_state) {
       return true;
     }
   }
@@ -383,17 +382,37 @@ static void can_init(void)
 void sys_can_init(void)
 {
   // Setup CAN RX and TX pins
-  // assumes PA11/PA12 for FDCAN1
+#ifndef FDCAN_RX_PORT
+#define FDCAN_RX_PORT GPIOA
+#define FDCAN_RX_PIN  LL_GPIO_PIN_11
+#endif
+#ifndef FDCAN_TX_PORT
+#define FDCAN_TX_PORT GPIOA
+#define FDCAN_TX_PIN  LL_GPIO_PIN_12
+#endif
+#ifndef FDCAN_RX_AF
+#define FDCAN_RX_AF LL_GPIO_AF_9
+#endif
+#ifndef FDCAN_TX_AF
+#define FDCAN_TX_AF LL_GPIO_AF_9
+#endif
+
   LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOA);
+  LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
 
   LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_InitStruct.Pin = LL_GPIO_PIN_11 | LL_GPIO_PIN_12;
   GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
   GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
   GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
   GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = LL_GPIO_AF_9; // AF9 for FDCAN1
-  LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = FDCAN_RX_PIN;
+  GPIO_InitStruct.Alternate = FDCAN_RX_AF;
+  LL_GPIO_Init(FDCAN_RX_PORT, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = FDCAN_TX_PIN;
+  GPIO_InitStruct.Alternate = FDCAN_TX_AF;
+  LL_GPIO_Init(FDCAN_TX_PORT, &GPIO_InitStruct);
 
   can_init();
 
