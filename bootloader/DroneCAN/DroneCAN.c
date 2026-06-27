@@ -63,7 +63,14 @@ static struct {
   uint32_t offset;
 } fwupdate;
 
-static bool have_raw_command;
+// set from the CAN RX ISR (RawCommand) and read in the boot decision, so
+// volatile (especially with -flto cross-TU optimisation)
+static volatile bool have_raw_command;
+
+void DroneCAN_set_have_signal(void)
+{
+  have_raw_command = true;
+}
 
 // some convenience macros
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -207,6 +214,10 @@ static void handle_param_ExecuteOpcode(CanardInstance* ins, CanardRxTransfer* tr
   if (req.opcode == UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_REQUEST_OPCODE_ERASE) {
     can_print("resetting to defaults");
     save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);
+    pkt.ok = true;
+  } else if (req.opcode == UAVCAN_PROTOCOL_PARAM_EXECUTEOPCODE_REQUEST_OPCODE_SAVE) {
+    // GetSet writes parameters straight to flash, so SAVE is a no-op; ack it
+    // so DroneCAN parameter clients that send SAVE see success.
     pkt.ok = true;
   }
 
