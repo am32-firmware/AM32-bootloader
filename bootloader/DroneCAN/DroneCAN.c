@@ -124,14 +124,13 @@ static uint16_t get_random16(void)
 }
 
 /*
-  get a 64 bit monotonic timestamp in microseconds since start. This
-  is platform specific
-
-  NOTE: this should be in functions.c
+  monotonic microseconds since start. uint32 wraps at ~71min, far beyond the
+  bootloader lifetime, and avoids the libgcc 64-bit divide. libcanard takes
+  uint64 timestamps - cast at the call sites.
 */
-static uint64_t micros64(void)
+static uint32_t micros32(void)
 {
-  static uint64_t base_us;
+  static uint32_t base_us;
   static uint16_t last_cnt;
   uint16_t cnt = bl_timer_us();
   if (cnt < last_cnt) {
@@ -142,11 +141,12 @@ static uint64_t micros64(void)
 }
 
 /*
-  get monotonic time in milliseconds since startup
+  get monotonic time in milliseconds since startup. 32-bit divide compiles
+  to a single UDIV on cortex-m4/m33 -- no libgcc helper needed.
 */
 static uint32_t millis32(void)
 {
-  return micros64() / 1000ULL;
+  return micros32() / 1000U;
 }
 
 /*
@@ -256,7 +256,7 @@ static void handle_GetNodeInfo(CanardInstance *ins, CanardRxTransfer *transfer)
 
   memset(&pkt, 0, sizeof(pkt));
 
-  node_status.uptime_sec = micros64() / 1000000ULL;
+  node_status.uptime_sec = micros32() / 1000000U;
   pkt.status = node_status;
 
   // fill in your major and minor firmware version
@@ -639,7 +639,7 @@ static void send_NodeStatus(void)
 {
   uint8_t buffer[UAVCAN_PROTOCOL_GETNODEINFO_RESPONSE_MAX_SIZE];
 
-  node_status.uptime_sec = micros64() / 1000000ULL;
+  node_status.uptime_sec = micros32() / 1000000U;
   node_status.health = UAVCAN_PROTOCOL_NODESTATUS_HEALTH_OK;
   node_status.mode = UAVCAN_PROTOCOL_NODESTATUS_MODE_MAINTENANCE;
   node_status.sub_mode = 0;
@@ -672,12 +672,14 @@ static void send_NodeStatus(void)
 /*
   This function is called at 1 Hz rate from the main loop.
 */
-static void process1HzTasks(uint64_t timestamp_usec)
+static void process1HzTasks(uint32_t timestamp_usec)
 {
   /*
-    Purge transfers that are no longer transmitted. This can free up some memory
+    Purge transfers that are no longer transmitted. This can free up some memory.
+    Canard's API is uint64_t; zero-extend here. Stale-transfer timeout is
+    CANARD_TRANSFER_TIMEOUT_USEC (~2s), well below the uint32 wrap window.
   */
-  canardCleanupStaleTransfers(&canard, timestamp_usec);
+  canardCleanupStaleTransfers(&canard, (uint64_t)timestamp_usec);
 
   /*
     Transmit the node status message
@@ -692,7 +694,7 @@ void DroneCAN_receiveFrame(void)
 {
   CanardCANFrame rx_frame = {0};
   while (sys_can_receive(&rx_frame) > 0) {
-    canardHandleRxFrame(&canard, &rx_frame, micros64());
+    canardHandleRxFrame(&canard, &rx_frame, (uint64_t)micros32());
   }
 }
 
@@ -701,7 +703,7 @@ void DroneCAN_receiveFrame(void)
 */
 void DroneCAN_handleFrame(CanardCANFrame *frame)
 {
-  canardHandleRxFrame(&canard, frame, micros64());
+  canardHandleRxFrame(&canard, frame, (uint64_t)micros32());
 }
 
 /*
@@ -799,7 +801,7 @@ static void DroneCAN_Startup(void)
  */
 bool DroneCAN_update()
 {
-  static uint64_t next_1hz_service_at;
+  static uint32_t next_1hz_service_at;
   static bool done_startup;
   if (!done_startup) {
     done_startup = true;
@@ -820,10 +822,13 @@ bool DroneCAN_update()
     return false;
   }
 
-  const uint64_t ts = micros64();
+  const uint32_t ts = micros32();
 
-  if (ts >= next_1hz_service_at) {
-    next_1hz_service_at += 1000000ULL;
+  /*
+    1Hz tick
+   */
+  if ((int32_t)(ts - next_1hz_service_at) >= 0) {
+    next_1hz_service_at = ts + 1000000U;
     process1HzTasks(ts);
   }
 
@@ -859,10 +864,11 @@ static void *memmem(const void *haystack, size_t haystacklen, const void *needle
 
 static void set_reason(enum boot_code code, const char *reason)
 {
-  static uint64_t last_msg_us;
+  static uint32_t last_msg_us;
   node_status.vendor_specific_status_code = code;
-  const uint64_t now_us = micros64();
-  if (now_us - last_msg_us > 5000000UL) {
+  // unsigned subtraction handles uint32 wrap
+  const uint32_t now_us = micros32();
+  if (now_us - last_msg_us > 5000000U) {
     last_msg_us = now_us;
     can_print(reason);
   }
