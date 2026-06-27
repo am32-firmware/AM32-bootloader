@@ -263,7 +263,8 @@ static void handle_GetNodeInfo(CanardInstance *ins, CanardRxTransfer *transfer)
 
   memset(&pkt, 0, sizeof(pkt));
 
-  node_status.uptime_sec = micros32() / 1000000U;
+  // uptime_sec is maintained by process1HzTasks via a 1Hz tick counter,
+  // not derived from the 71-minute-wrapping microsecond timer.
   pkt.status = node_status;
 
   // fill in your major and minor firmware version
@@ -646,7 +647,8 @@ static void send_NodeStatus(void)
 {
   uint8_t buffer[UAVCAN_PROTOCOL_GETNODEINFO_RESPONSE_MAX_SIZE];
 
-  node_status.uptime_sec = micros32() / 1000000U;
+  // uptime_sec is maintained by process1HzTasks (1Hz tick counter), not
+  // derived from the wrapping microsecond timer.
   node_status.health = UAVCAN_PROTOCOL_NODESTATUS_HEALTH_OK;
   node_status.mode = UAVCAN_PROTOCOL_NODESTATUS_MODE_MAINTENANCE;
   node_status.sub_mode = 0;
@@ -689,9 +691,17 @@ static void process1HzTasks(uint32_t timestamp_usec)
   canardCleanupStaleTransfers(&canard, (uint64_t)timestamp_usec);
 
   /*
-    Transmit the node status message
+    Transmit the node status message. uptime_sec is bumped AFTER the
+    broadcast so the first NodeStatus (which fires almost immediately
+    after boot) reports uptime=0, matching the old micros64()-based
+    semantics.
   */
   send_NodeStatus();
+
+  /*
+    wraps at 136 years
+  */
+  node_status.uptime_sec++;
 }
 
 /*
