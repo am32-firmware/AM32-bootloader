@@ -116,6 +116,19 @@ int main(void)
     // give 1.5s for debugger to attach
     delayMicroseconds(1500000);
 
+    /*
+      disable interrupts for the whole flash sequence. The updater runs from
+      the same flash bank that we are about to erase + reprogram; on dual-bank
+      STM32G4 (e.g. STM32G491 / G4Axx in DBANK=1 mode) the bootloader live in
+      bank 1 just like the updater code, and bank-1 reads stall during any
+      bank-1 write. If an interrupt fires during a write, the CPU may try to
+      fetch the handler from the half-erased bank and HardFault, leaving the
+      chip stuck with a partially-written bootloader. Disabling interrupts
+      avoids the race; we NVIC_SystemReset below so interrupt state is
+      naturally restored on the next boot.
+     */
+    __disable_irq();
+
     // do the flash
     flash_bootloader();
   }
