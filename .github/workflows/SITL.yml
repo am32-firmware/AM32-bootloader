@@ -1,0 +1,43 @@
+name: SITL Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  sitl-bootloader-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build SITL bootloader
+        run: make AM32_SITL_BOOTLOADER_PB4_CAN
+
+      - name: Get protocol tools from the firmware repo
+        uses: actions/checkout@v4
+        with:
+          repository: am32-firmware/AM32
+          path: am32-firmware
+          # only the python protocol tools in Mcu/SITL are used, the
+          # firmware itself is not built here
+          sparse-checkout: Mcu/SITL
+
+      - name: Install pydronecan
+        run: python3 -m pip install dronecan
+
+      - name: Run bootloader tests
+        run: |
+          mkdir sitl_test_run && cd sitl_test_run
+          python3 ../Mcu/sitl/test/run_bl_tests.py \
+            --bootloader ../obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf \
+            --fw-tools ../am32-firmware/Mcu/SITL
+
+      - name: Upload test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sitl-bootloader-test-log
+          path: sitl_test_run/bl_test.log
