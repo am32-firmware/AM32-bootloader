@@ -50,7 +50,9 @@
 #endif
 
 // assume that main fw starts at 16k
-#define MAIN_FW_START_ADDR 0x08004000
+#ifndef MAIN_FW_START_ADDR
+#define MAIN_FW_START_ADDR (MCU_FLASH_START + 0x4000)
+#endif
 
 static CanardInstance canard;
 static uint8_t canard_memory_pool[CANARD_POOL_SIZE];
@@ -1408,7 +1410,7 @@ bool DroneCAN_boot_ok(void)
   const uint32_t app_max_len = (128-18)*1024;
   const uint8_t *fw_base = (const uint8_t *)MAIN_FW_START_ADDR;
   struct app_signature *appsig = memmem(fw_base, app_max_len, sig, sizeof(sig));
-  if (appsig == NULL || (((uint32_t)appsig) & 3) != 0) {
+  if (appsig == NULL || (((uintptr_t)appsig) & 3) != 0) {
     set_reason(FAIL_REASON_NO_APP_SIG, "no app signature");
     return false;
   }
