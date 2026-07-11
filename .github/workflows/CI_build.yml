@@ -13,7 +13,9 @@ jobs:
         run: |
           make arm_sdk_install
           make -j8
-          tools/linux/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-size obj/*.elf
+          # the native SITL target is an x86 host binary; arm-none-eabi-size
+          # cannot read it, so size only the ARM firmware elfs
+          tools/linux/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-size $(find obj -maxdepth 1 -name '*.elf' ! -name '*SITL*')
 
       - name: Archive build
         uses: actions/upload-artifact@v4

@@ -20,7 +20,7 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A153
+MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A153 SITL_CAN
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 PB2
@@ -174,22 +174,25 @@ $(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
 $(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
 $(eval xLDSCRIPT := $(if $($(MCU)_LDSCRIPT), $($(MCU)_LDSCRIPT), $$(if $$(call has_can_suffix,$$(BUILD)),$(LDSCRIPT_BL_CAN),$(LDSCRIPT_BL))))
 $(eval xBLU_LDSCRIPT := $(if $($(MCU)_LDSCRIPT_BLU), $($(MCU)_LDSCRIPT_BLU), $$(if $$(call has_can_suffix,$$(BUILD)),$(LDSCRIPT_BLU_CAN),$(LDSCRIPT_BLU))))
-$(eval CFLAGS_DRONECAN := $$(if $$(call has_can_suffix,$$(1)),$$(CFLAGS_DRONECAN_L431)))
+$(eval CFLAGS_DRONECAN := $$(if $$(call has_can_suffix,$$(1)),$$(if $$(CFLAGS_DRONECAN_$(MCU)),$$(CFLAGS_DRONECAN_$(MCU)),$$(CFLAGS_DRONECAN_L431))))
 $(eval SRC_DRONECAN := $(if $(call has_can_suffix,$(1)),$(SRC_DRONECAN_$(MCU))))
 
 -include $(DEP_FILE)
 -include $(BLU_DEP_FILE)
 
-$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -DAM32_MCU=\"$(MCU)\" $$(CFLAGS_DRONECAN)
-$(ELF_FILE): LDFLAGS_BL := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xLDSCRIPT)
+$(ELF_FILE): CFLAGS_BL := $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(if $$(CFLAGS_BASE_$(MCU)),$$(CFLAGS_BASE_$(MCU)),$$(CFLAGS_BASE)) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -DAM32_MCU=\"$(MCU)\" $$(CFLAGS_DRONECAN)
+$(ELF_FILE): LDFLAGS_BL := $$(if $$(LDFLAGS_COMMON_$(MCU)),$$(LDFLAGS_COMMON_$(MCU)),$$(LDFLAGS_COMMON)) $$(LDFLAGS_$(MCU)) $(if $(NATIVE_$(MCU)),,-T$(xLDSCRIPT))
 $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 	$$(QUIET)echo building bootloader for $(BUILD) with pin $(PIN)
 	$$(QUIET)$$(MKDIR) -p $(OBJ)
 	$$(QUIET)echo Compiling $(notdir $$@)
 	$$(QUIET)$(xCC) $$(CFLAGS_BL) $(CFLAGS_DRONECAN) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL) $(SRC_DRONECAN) -Wl,-Map=$(MAP_FILE)
-	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
+# debug.elf/svd/openocd.cfg are for on-chip debugging; skip them for the
+# native SITL target so obj/debug.elf never becomes a host binary that
+# arm-none-eabi-size (run over obj/*.elf in CI) cannot read
+$(if $(NATIVE_$(MCU)),,	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
 	$$(QUIET)$$(CP) -f $$(SVD_$(MCU)) $$(OBJ)/debug.svd
-	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)
+	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL))
 
 $(H_FILE): $(BIN_FILE)
 	$$(QUIET)python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
@@ -221,13 +224,13 @@ $(BLU_AMJ_FILE): $$(BLU_BIN_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
 	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --githash $(shell git rev-parse HEAD) $(BLU_HEX_FILE) $(BLU_AMJ_FILE)
 
-$(TARGET): $$(HEX_FILE)
+$(TARGET): $$(if $(NATIVE_$(MCU)),$$(ELF_FILE),$$(HEX_FILE))
 
 $(BLU_TARGET): $$(BLU_AMJ_FILE)
 
-# add to list
+# add to list; native builds have no bl_update variant
 ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
-BLU_BUILDS := $(BLU_BUILDS) $(BLU_TARGET)
+BLU_BUILDS := $(BLU_BUILDS) $(if $(NATIVE_$(MCU)),,$(BLU_TARGET))
 endef
 
 # choose per-MCU pin override if set, otherwise the global BOOTLOADER_PINS
