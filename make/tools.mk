@@ -7,6 +7,8 @@
 ifeq ($(MSYSTEM),UCRT64)
 OSDIR:=windows
 ARM_SDK_PREFIX:=tools/windows/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-
+# the SITL bootloader needs a POSIX host, only Cygwin provides that on Windows
+MCU_NOBUILD:=SITL_CAN
 CP:=cp
 DSEP:=/
 NUL:=/dev/null
@@ -19,6 +21,7 @@ else
 ifeq ($(OS),Windows_NT)
 OSDIR:=windows
 ARM_SDK_PREFIX:=tools/windows/xpack-arm-none-eabi-gcc-10.3.1-2.3/bin/arm-none-eabi-
+MCU_NOBUILD:=SITL_CAN
 SHELL:=cmd.exe
 CP:=tools\\windows\\make\\bin\\cp
 DSEP:=\\
@@ -41,8 +44,9 @@ MKDIR:=mkdir
 RM:=rm
 CUT:=cut
 FGREP:=fgrep
-# no toolchain for building V203 on MacOS
-MCU_NOBUILD:=V203
+# no toolchain for building V203 on MacOS; the SITL bootloader needs
+# the fixed low flash mapping which macOS does not allow by default
+MCU_NOBUILD:=V203 SITL_CAN
 else
 # assume Linux
 OSDIR:=linux
