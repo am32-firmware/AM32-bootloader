@@ -49,6 +49,11 @@ struct CANStats canstats;
 
 static int fd_in = -1;
 static int fd_out = -1;
+// our TX socket source address: multicast loopback delivers our own
+// datagrams back to fd_in, but a real CAN controller never receives its
+// own frames, so RX must drop them (can_seen would self-trigger and
+// block the no-CAN boot fallback)
+static struct sockaddr_in tx_addr;
 static bool irq_enabled = true;
 
 static uint16_t crc16_CCITT(const uint8_t* buf, uint32_t len)
@@ -197,6 +202,10 @@ void sys_can_init(void)
         }
     }
 
+    // after the self test, which may have rebound fd_out
+    socklen_t alen = sizeof(tx_addr);
+    getsockname(fd_out, (struct sockaddr*)&tx_addr, &alen);
+
     fprintf(stderr, "SITL: bootloader CAN on %s (%s:%d)\n", name, address, MCAST_PORT);
 }
 
@@ -225,9 +234,16 @@ int16_t sys_can_receive(CanardCANFrame* rx_frame)
         return -1;
     }
     struct mcast_pkt pkt;
-    const ssize_t ret = recv(fd_in, &pkt, sizeof(pkt), MSG_DONTWAIT);
+    struct sockaddr_in src;
+    socklen_t srclen = sizeof(src);
+    const ssize_t ret = recvfrom(fd_in, &pkt, sizeof(pkt), MSG_DONTWAIT,
+                                 (struct sockaddr*)&src, &srclen);
     if (ret < 0) {
         return (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1;
+    }
+    if (src.sin_port == tx_addr.sin_port
+        && src.sin_addr.s_addr == tx_addr.sin_addr.s_addr) {
+        return 0; // own frame looped back
     }
     if (ret < MCAST_HDR_LEN || pkt.magic != MCAST_MAGIC) {
         canstats.rxframe_error++;
