@@ -28,9 +28,18 @@ CFLAGS_$(MCU) := \
 	-I$(HAL_FOLDER_$(MCU))/Inc \
 	-DMCU_$(MCU)
 
+# optional AddressSanitizer for the native bootloader build, matching
+# the app's SITL_SANITIZE. -no-pie keeps the fixed flash mapping, and
+# ASan tolerates it here since the bootloader's mapped regions are well
+# clear of the shadow. Off by default.
+ifneq ($(SITL_SANITIZE),)
+SITL_SAN_FLAGS := -fsanitize=$(SITL_SANITIZE) -fno-omit-frame-pointer
+CFLAGS_BASE_$(MCU) += $(SITL_SAN_FLAGS)
+endif
+
 # -no-pie so the fixed flash mapping at 0x08000000 and the devinfo
 # address fit in the protocol's 32 bit addresses
-LDFLAGS_COMMON_$(MCU) := -no-pie
+LDFLAGS_COMMON_$(MCU) := -no-pie $(SITL_SAN_FLAGS)
 
 SRC_$(MCU)_BL := $(wildcard $(HAL_FOLDER_$(MCU))/Src/*.c)
 
