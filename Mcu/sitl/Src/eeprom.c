@@ -83,12 +83,13 @@ static void seed_flash(void)
     sig.crc2 = bl_crc32(app + sig_ofs + sizeof(sig), app_len - (sig_ofs + sizeof(sig)));
     memcpy(app + sig_ofs, &sig, sizeof(sig));
 
-    // firmware name, which the real firmware stores in the .file_name
-    // section just below the eeprom (EEPROM_START_ADD - 32). Without it
-    // the config tool reads erased 0xFF flash and shows a garbage name
+    // firmware name, at the CAN layout's .file_name location: just
+    // after the vector-table region at the start of the app, matching
+    // what devinfo.filename_start now advertises. Without it the
+    // config tool reads erased 0xFF flash and shows a garbage name
     static const char fwname[] = "AM32_SITL_CAN";
-    memset(flash + EEPROM_OFFSET - 32, 0, 30);
-    memcpy(flash + EEPROM_OFFSET - 32, fwname, sizeof(fwname) - 1);
+    memset(flash + APP_OFFSET + 512, 0, 30);
+    memcpy(flash + APP_OFFSET + 512, fwname, sizeof(fwname) - 1);
 }
 
 void sitl_bl_flash_init(void)

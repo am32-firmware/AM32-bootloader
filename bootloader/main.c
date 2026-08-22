@@ -118,6 +118,21 @@ static uint16_t invalid_command;
 
 #include <blutil.h>
 
+/*
+  where the application keeps its .file_name section. Non-CAN firmware
+  links it directly below the eeprom; CAN firmware links it just after
+  the vector-table region at the start of the app (FLASH1 in
+  ldscript_CAN.ld, sized per family by CAN_FLASH1_SIZE in blutil.h).
+  This feeds devinfo.filename_start, so a v3 configurator reads the
+  name from where it actually is on both layouts.
+ */
+#if DRONECAN_SUPPORT && defined(CAN_FLASH1_SIZE)
+#define FILE_NAME_ADD (FIRMWARE_RELATIVE_START + CAN_FLASH1_SIZE)
+#else
+#define FILE_NAME_ADD (EEPROM_START_ADD - 32)
+#endif
+
+
 // default no-op LED functions if not provided by blutil.h (USE_RGB_LED)
 #ifndef USE_RGB_LED
 static inline void bl_led_init(void) {}
@@ -266,7 +281,7 @@ static const struct __attribute__((packed)) {
   sizeof(devinfo),
   ADDRESS_SHIFT,
   (uint16_t)(FIRMWARE_RELATIVE_START >> ADDRESS_SHIFT), // firmware_start
-  (uint16_t)((EEPROM_START_ADD - 32) >> ADDRESS_SHIFT), // filename_start
+  (uint16_t)(FILE_NAME_ADD >> ADDRESS_SHIFT), // filename_start
   (uint16_t)(EEPROM_START_ADD >> ADDRESS_SHIFT), // eeprom_start
   (uint16_t)((EEPROM_START_ADD + 48U) >> ADDRESS_SHIFT) // tune_start
 };
