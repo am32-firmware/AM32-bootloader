@@ -4,6 +4,12 @@
  */
 #pragma once
 
+// where a CAN firmware build links its .file_name section: just
+// after the vector-table region at the start of the app, sized
+// per family in the firmware's ldscript_CAN.ld (FLASH1). Non-CAN
+// builds keep the name at EEPROM_START_ADD - 32 instead.
+#define CAN_FLASH1_SIZE 512
+
 #include <sitl_bl.h>
 
 // match the ARM targets the app header checks are performed against
