@@ -28,6 +28,7 @@
 // must match EEPROM_START_ADD for BOARD_FLASH_SIZE=128 in main.c
 #define EEPROM_OFFSET 0x1F800
 #define APP_OFFSET 0x4000 // FIRMWARE_RELATIVE_START for CAN builds
+#define SEEDED_APP_SIZE (8 * 1024)
 
 static uint8_t* flash;
 static int flash_fd = -1;
@@ -53,16 +54,21 @@ static uint32_t bl_crc32(const uint8_t* buf, uint32_t size)
   jump() stack/entry checks and an app_signature block that passes
   DroneCAN_boot_ok(), so the boot gates behave as with a programmed ESC
  */
-static void seed_flash(void)
+static void seed_app(uint8_t* app, bool legacy)
 {
-    memset(flash, 0xFF, FLASH_SIZE);
-    uint8_t* app = flash + APP_OFFSET;
-    const uint32_t app_len = 8 * 1024;
+    const uint32_t app_len = SEEDED_APP_SIZE;
     memset(app, 0, app_len);
     const uint32_t sp = 0x20004000; // inside RAM
     const uint32_t entry = FLASH_BASE_ADDR + APP_OFFSET + 0x101;
     memcpy(app, &sp, 4);
     memcpy(app + 4, &entry, 4);
+
+    // Include the name in CRC1. Writing it after the signature was
+    // calculated left the simulated application unable to pass boot checks.
+    static const char fwname[] = "AM32_SITL_CAN";
+    if (!legacy) {
+        memcpy(app + 512, fwname, sizeof(fwname));
+    }
 
     // app_signature at an aligned offset near the end of the image,
     // layout from bootloader/DroneCAN/DroneCAN.c
@@ -83,13 +89,28 @@ static void seed_flash(void)
     sig.crc2 = bl_crc32(app + sig_ofs + sizeof(sig), app_len - (sig_ofs + sizeof(sig)));
     memcpy(app + sig_ofs, &sig, sizeof(sig));
 
-    // firmware name, at the CAN layout's .file_name location: just
-    // after the vector-table region at the start of the app, matching
-    // what devinfo.filename_start now advertises. Without it the
-    // config tool reads erased 0xFF flash and shows a garbage name
-    static const char fwname[] = "AM32_SITL_CAN";
-    memset(flash + APP_OFFSET + 512, 0, 30);
-    memcpy(flash + APP_OFFSET + 512, fwname, sizeof(fwname) - 1);
+    // Reproduce the old synthetic image only to recognise it for repair.
+    if (legacy) {
+        memcpy(app + 512, fwname, sizeof(fwname));
+    }
+}
+
+static void seed_flash(void)
+{
+    memset(flash, 0xFF, FLASH_SIZE);
+    seed_app(flash + APP_OFFSET, false);
+}
+
+static void repair_legacy_seed(void)
+{
+    uint8_t legacy[SEEDED_APP_SIZE];
+    seed_app(legacy, true);
+    // Match the entire old synthetic application, not merely a bad CRC:
+    // never repair or replace firmware uploaded through the configurator.
+    if (memcmp(flash + APP_OFFSET, legacy, sizeof(legacy)) == 0) {
+        seed_app(flash + APP_OFFSET, false);
+        fprintf(stderr, "SITL: repaired legacy seeded application CRC\n");
+    }
 }
 
 void sitl_bl_flash_init(void)
@@ -132,6 +153,8 @@ void sitl_bl_flash_init(void)
     if (fresh) {
         fprintf(stderr, "SITL: seeding flash image %s\n", path);
         seed_flash();
+    } else {
+        repair_legacy_seed();
     }
 
     // mirror the shared eeprom file into the eeprom page: the app may
