@@ -2,9 +2,9 @@ name: SITL Tests
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 jobs:
@@ -15,6 +15,9 @@ jobs:
 
       - name: Build SITL bootloader
         run: make AM32_SITL_BOOTLOADER_PB4_CAN
+
+      - name: Check seeded application and legacy flash recovery
+        run: python3 Mcu/sitl/test/seed_test.py --bootloader obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf --can-uri mcast:8
 
       - name: Get protocol tools from the firmware repo
         uses: actions/checkout@v4
@@ -41,3 +44,19 @@ jobs:
         with:
           name: sitl-bootloader-test-log
           path: sitl_test_run/bl_test.log
+
+  cygwin-bootloader-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cygwin/cygwin-install-action@v4
+        with:
+          packages: gcc-core make python3 git
+      - name: Build and test Cygwin bootloader
+        shell: C:\cygwin\bin\bash.exe --noprofile --norc -o igncr -eo pipefail '{0}'
+        run: |
+          export PATH=/usr/bin:$PATH
+          cd "$(cygpath -u "$GITHUB_WORKSPACE")"
+          git config --global --add safe.directory "$PWD"
+          make -j8 OS=Linux SHELL=/bin/bash AM32_SITL_BOOTLOADER_PB4_CAN
+          python3 Mcu/sitl/test/seed_test.py --bootloader obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf --can-uri mcast:8

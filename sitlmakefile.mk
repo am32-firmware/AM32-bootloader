@@ -39,7 +39,13 @@ endif
 
 # -no-pie so the fixed flash mapping at 0x08000000 and the devinfo
 # address fit in the protocol's 32 bit addresses
+ifneq ($(filter CYGWIN%,$(UNAME_S)),)
+# PE defaults to an image base above 4 GB. Keep devinfo pointers within
+# the wire protocol's 32-bit address range and clear of mapped flash.
+LDFLAGS_COMMON_$(MCU) := -Wl,--image-base,0x400000,--disable-dynamicbase $(SITL_SAN_FLAGS)
+else
 LDFLAGS_COMMON_$(MCU) := -no-pie $(SITL_SAN_FLAGS)
+endif
 
 SRC_$(MCU)_BL := $(wildcard $(HAL_FOLDER_$(MCU))/Src/*.c)
 
