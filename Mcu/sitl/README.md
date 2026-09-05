@@ -1,6 +1,6 @@
 # AM32 bootloader SITL
 
-Runs the unmodified bootloader as a native Linux process for testing
+Runs the unmodified bootloader as a native Linux or Cygwin process for testing
 the input-type detection, the 19200 baud 4-way configuration protocol
 and the DroneCAN bootloader flows without hardware.
 
@@ -9,6 +9,23 @@ Build and run:
 ```
 make AM32_SITL_BOOTLOADER_PB4_CAN
 ./obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf --eeprom test_ee.bin --can-uri none
+```
+
+On Windows, install Cygwin's `gcc-core`, `make`, `python3` and `git`
+packages, then build from its Bash shell:
+
+```
+make OS=Linux SHELL=/bin/bash AM32_SITL_BOOTLOADER_PB4_CAN
+```
+
+`OS=Linux` selects the POSIX build tools. The linker uses a fixed PE image
+base below 4 GB so protocol addresses remain representable. The `.elf`
+output is a Cygwin Windows executable and requires `cygwin1.dll`.
+
+Check startup, legacy seeded-flash recovery and multicast initialisation:
+
+```
+python3 Mcu/sitl/test/seed_test.py --bootloader obj/AM32_SITL_BOOTLOADER_PB4_CAN_V19.elf --can-uri mcast:8
 ```
 
 Run with `--help` for all options. Key points:

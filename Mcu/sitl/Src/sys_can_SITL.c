@@ -130,7 +130,12 @@ void sys_can_init(void)
     }
     const int one = 1;
     setsockopt(fd_in, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-    if (bind(fd_in, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    struct sockaddr_in bind_addr = addr;
+#ifdef __CYGWIN__
+    // Windows cannot bind a multicast group address.
+    bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+#endif
+    if (bind(fd_in, (struct sockaddr*)&bind_addr, sizeof(bind_addr)) != 0) {
         perror("SITL: can bind");
         exit(1);
     }
@@ -169,6 +174,9 @@ void sys_can_init(void)
       rebinding the sender to 127.0.0.1 if not (see the firmware SITL
       driver for the routing background)
      */
+#ifndef __CYGWIN__
+    // Cygwin poll() does not reliably report multicast. Keep Windows on
+    // its normal multicast interface instead of rebinding to loopback.
     for (int attempt = have_if ? 1 : 0; attempt < 2; attempt++) {
         uint8_t probe[4] = { 0xde, 0xad, 0xbe, 0xef }; // wrong magic, ignored
         send(fd_out, probe, sizeof(probe), 0);
@@ -201,6 +209,8 @@ void sys_can_init(void)
             fprintf(stderr, "SITL: WARNING: CAN multicast self test failed for %s\n", address);
         }
     }
+
+#endif
 
     // after the self test, which may have rebound fd_out
     socklen_t alen = sizeof(tx_addr);
