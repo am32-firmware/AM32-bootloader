@@ -1,6 +1,10 @@
 MCU := L431
 PART := STM32L431xx
 
+# a legacy 4k L431 bootloader used the 64k flash layout, leaving room for a
+# transition updater between the 16k CAN bootloader and the legacy eeprom
+BL_TRANSITION_$(MCU) := 1
+
 HAL_FOLDER_$(MCU) := $(HAL_FOLDER)/$(call lc,$(MCU))
 
 MCU_$(MCU) := -mcpu=cortex-m4 -mthumb
