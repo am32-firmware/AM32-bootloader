@@ -42,13 +42,26 @@ MCU = a[1]
 PIN = a[4]
 VER = a[-1][:-4]
 
-if len(a) == 6:
-    flash_size = "%uK" % default_flash_sizes[MCU]
-elif len(a) == 7:
-    flash_size = a[-2]
-else:
+# anything between the pin and the version is a build tag: a flash size, CAN
+# for a DroneCAN bootloader, or FROM4K for an updater that a legacy 4k
+# bootloader can flash
+tags = a[5:-1]
+can = "CAN" in tags
+transition = "FROM4K" in tags
+flash_sizes = [t for t in tags if t not in ("CAN", "FROM4K")]
+
+if len(flash_sizes) > 1 or not all(t.endswith("K") for t in flash_sizes):
     print("Bad hex file name2")
     sys.exit(1)
+
+if flash_sizes:
+    flash_size = flash_sizes[0]
+elif can:
+    # CAN builds are always built for the 128k flash layout
+    flash_size = "128K"
+else:
+    flash_size = "%uK" % default_flash_sizes[MCU]
+
 if not MCU in 'E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 A153'.split():
     print(f"Bad MCU {MCU}")
     sys.exit(1)
@@ -60,6 +73,9 @@ d = {
     "githash": args.githash,
     "version": VER,
     "flashSize": flash_size,
+    # a transition updater is flashed by a legacy 4k bootloader, over the top
+    # of the application, rather than by an existing 16k CAN bootloader
+    "transition": transition,
     "hex": base64.b64encode(img).decode('utf-8'),
 }
 
