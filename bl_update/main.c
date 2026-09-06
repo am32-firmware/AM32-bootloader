@@ -56,7 +56,16 @@ const struct {
 } app_signature __attribute__((section(".app_signature"))) = {
   .magic1 = APP_SIGNATURE_MAGIC1,
   .magic2 = APP_SIGNATURE_MAGIC2,
+#if BL_TRANSITION
+  /*
+    the transition updater is left behind in the application area once
+    it has run. An impossible length keeps the new bootloader from ever
+    treating it as a bootable application
+   */
+  .fwlen = 0xFFFFFFFF,
+#else
   .fwlen = 0,
+#endif
   .crc1 = 0,
   .crc2 = 0,
   .mcu = AM32_MCU,
@@ -74,6 +83,80 @@ const struct {
 #define PORT_LETTER      0 // dummy
 
 #include <blutil.h>
+
+#if BL_TRANSITION
+/*
+  the transition updater is flashed by a legacy 4k bootloader, which
+  jumps to the application start at 0x08001000. All of our code and the
+  bootloader image we carry must be above the 16k we are about to erase,
+  so the only thing at 0x08001000 is this two word vector table
+ */
+extern uint32_t _estack;
+extern void Reset_Handler(void);
+
+static const uint32_t stub_vector[2] __attribute__((section(".stub_vector"), used)) = {
+  (uint32_t)(uintptr_t)&_estack,
+  (uint32_t)(uintptr_t)Reset_Handler
+};
+
+#define DEVINFO_MAGIC1 0x5925e3da
+#define DEVINFO_MAGIC2 0x4eb863d9
+
+/*
+  find the deviceInfo bytes of the devinfo structure in a bootloader
+  image, or NULL if the image has none
+ */
+static const uint8_t *find_device_info(const uint8_t *base, uint32_t len)
+{
+  const uint32_t magic[2] = { DEVINFO_MAGIC1, DEVINFO_MAGIC2 };
+  for (uint32_t ofs=0; ofs+sizeof(magic)+9 <= len; ofs += 4) {
+    const uint8_t *deviceInfo = &base[ofs+sizeof(magic)];
+    // the deviceInfo always starts with the ESC device type
+    if (memcmp(&base[ofs], magic, sizeof(magic)) == 0 &&
+        memcmp(deviceInfo, "471", 3) == 0) {
+      return deviceInfo;
+    }
+  }
+  return NULL;
+}
+
+/*
+  eeprom address of a bootloader image, from the flash size code in its
+  deviceInfo. Returns 0 if we can't work it out
+ */
+static uint32_t eeprom_address(const uint8_t *base, uint32_t len)
+{
+  const uint8_t *deviceInfo = find_device_info(base, len);
+  if (deviceInfo == NULL) {
+    return 0;
+  }
+  switch (deviceInfo[4]) {
+  case 0x1f: return MCU_FLASH_START + 0x7c00;  // 32k layout
+  case 0x35: return MCU_FLASH_START + 0xf800;  // 64k layout
+  case 0x2b: return MCU_FLASH_START + 0x1f800; // 128k layout
+  }
+  return 0;
+}
+
+/*
+  a CAN bootloader uses the 128k flash layout, so its eeprom is not where
+  a legacy 4k bootloader kept it. Leave that page blank rather than
+  carrying the old settings over: the new bootloader will not boot the
+  application until the ESC is configured again, which is what we want
+  after changing bootloader, and the user sets it up from scratch with
+  the configurator or the DroneCAN GUI tool.
+ */
+static void blank_eeprom(void)
+{
+  const uint32_t addr = eeprom_address(bl_image, sizeof(bl_image));
+  if (addr == 0) {
+    return;
+  }
+  // a zero length write erases the page the address starts and programs
+  // nothing, leaving the eeprom in its erased 0xFF state
+  save_flash_nolib((const uint8_t *)MCU_FLASH_START, 0, addr);
+}
+#endif // BL_TRANSITION
 
 static void delayMicroseconds(uint32_t micros)
 {
@@ -108,6 +191,10 @@ static void flash_bootloader(void)
 
 int main(void)
 {
+#if BL_TRANSITION
+  // we were entered through the stub vector table, point VTOR at the real one
+  SCB->VTOR = MCU_FLASH_START + FIRMWARE_RELATIVE_START;
+#endif
   bl_clock_config();
   bl_timer_init();
 
@@ -128,6 +215,10 @@ int main(void)
       naturally restored on the next boot.
      */
     __disable_irq();
+
+#if BL_TRANSITION
+    blank_eeprom();
+#endif
 
     // do the flash
     flash_bootloader();
