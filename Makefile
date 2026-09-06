@@ -75,6 +75,10 @@ BIN_DIR := $(ROOT)/$(OBJ)
 # find the SVD files
 $(foreach MCU,$(MCU_TYPES),$(eval SVD_$(MCU) := $(wildcard $(HAL_FOLDER_$(MCU))/*.svd)))
 
+# a recipe that fails must not leave its target behind: a hex that failed
+# its layout check would otherwise look up to date on the next build
+.DELETE_ON_ERROR:
+
 .PHONY : clean all
 all : check_tools bootloaders
 
@@ -106,6 +110,7 @@ LDSCRIPT_BL := bootloader/ldscript_bl.ld
 LDSCRIPT_BL_CAN := bootloader/ldscript_bl_CAN.ld
 LDSCRIPT_BLU := bl_update/ldscript_bl.ld
 LDSCRIPT_BLU_CAN := bl_update/ldscript_bl_CAN.ld
+LDSCRIPT_BLT := bl_update/ldscript_bl_transition.ld
 
 # Function to extract CFLAGS based on target name
 get_flash_size = $(if $(filter %K,$(word 2,$(subst _, ,$1))),-DBOARD_FLASH_SIZE=$(subst K,,$(word 2,$(subst _, ,$1))))
@@ -133,6 +138,11 @@ define BOOTLOADER_UPDATE_BASENAME
 $(IDENTIFIER)_$(call base_mcu,$(1))_BL_UPDATER_$(2)$(call get_k_tag,$(1))
 endef
 
+# a transition updater is one that is flashed by a legacy 4k bootloader
+define BOOTLOADER_TRANSITION_BASENAME
+$(call BOOTLOADER_UPDATE_BASENAME,$(1),$(2))_FROM4K
+endef
+
 # bootloader target names with version for filename
 define BOOTLOADER_BASENAME_VER
 $(call BOOTLOADER_BASENAME,$(1),$(2))_V$(BOOTLOADER_VERSION)
@@ -142,6 +152,15 @@ endef
 define BOOTLOADER_UPDATE_BASENAME_VER
 $(call BOOTLOADER_UPDATE_BASENAME,$(1),$(2))_V$(BOOTLOADER_VERSION)
 endef
+
+define BOOTLOADER_TRANSITION_BASENAME_VER
+$(call BOOTLOADER_TRANSITION_BASENAME,$(1),$(2))_V$(BOOTLOADER_VERSION)
+endef
+
+# a transition updater is only built for CAN builds on MCUs where the legacy
+# 4k bootloader used the 64k flash layout, so that the updater fits between
+# the 16k CAN bootloader and the legacy eeprom
+has_transition = $(if $(call has_can_suffix,$1),$(BL_TRANSITION_$(call base_mcu,$1)))
 
 # list of targets formed using CREATE_BOOTLOADER_TARGET
 ALL_BUILDS :=
@@ -197,7 +216,7 @@ $(if $(NATIVE_$(MCU)),,	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
 $(H_FILE): $(BIN_FILE)
 	$$(QUIET)python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)
 
-$(BLU_ELF_FILE): CFLAGS_BLU := -DAM32_MCU=\"$(MCU)\" $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -Wno-unused-variable -Wno-unused-function
+$(BLU_ELF_FILE): CFLAGS_BLU := -DAM32_MCU=\"$(MCU)\" $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -DBL_TRANSITION=0 -Wno-unused-variable -Wno-unused-function
 $(BLU_ELF_FILE): LDFLAGS_BLU := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xBLU_LDSCRIPT)
 $(BLU_ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BLU) $(H_FILE)
 	$$(QUIET)echo building bootloader updater for $(BUILD) with pin $(PIN)
@@ -233,13 +252,61 @@ ALL_BUILDS := $(ALL_BUILDS) $(TARGET)
 BLU_BUILDS := $(BLU_BUILDS) $(if $(NATIVE_$(MCU)),,$(BLU_TARGET))
 endef
 
+# create a transition updater build target, which is the same updater firmware
+# linked to be flashed by a legacy 4k bootloader over the top of the
+# application. It carries no valid app signature, as it is left behind in the
+# application area once it has run and must never be booted
+define CREATE_TRANSITION_TARGET
+$(eval BUILD := $(1))
+$(eval PIN := $(2))
+$(eval BOARD := $(3))
+$(eval MCU := $$(call base_mcu,$$(1)))
+$(eval EXTRA_CFLAGS := $(call get_cflags,$(1)))
+$(eval H_FILE := $(BIN_DIR)/$(call BOOTLOADER_BASENAME_VER,$(BUILD),$(PIN)).h)
+$(eval BLT_ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_TRANSITION_BASENAME_VER,$(BUILD),$(PIN)).elf)
+$(eval BLT_HEX_FILE := $(BLT_ELF_FILE:.elf=.hex))
+$(eval BLT_DEP_FILE := $(BLT_ELF_FILE:.elf=.d))
+$(eval BLT_MAP_FILE := $(BLT_ELF_FILE:.elf=.map))
+$(eval BLT_AMJ_FILE := $(BLT_ELF_FILE:.elf=.amj))
+$(eval BLT_TARGET := $(call BOOTLOADER_TRANSITION_BASENAME,$(BUILD),$(PIN)))
+
+$(eval xCC := $(if $($(MCU)_CC), $($(MCU)_CC), $(CC)))
+$(eval xOBJCOPY := $(if $($(MCU)_OBJCOPY), $($(MCU)_OBJCOPY), $(OBJCOPY)))
+$(eval xBLT_LDSCRIPT := $(if $($(MCU)_LDSCRIPT_BLT), $($(MCU)_LDSCRIPT_BLT), $(LDSCRIPT_BLT)))
+
+-include $(BLT_DEP_FILE)
+
+$(BLT_ELF_FILE): CFLAGS_BLT := -DAM32_MCU=\"$(MCU)\" $$(MCU_$(MCU)) $$(CFLAGS_$(MCU)) $$(CFLAGS_BASE) -DBOOTLOADER -DUSE_$(PIN) $(if $(BOARD),-D$(BOARD)) $(EXTRA_CFLAGS) -DBL_TRANSITION=1 -Wno-unused-variable -Wno-unused-function
+$(BLT_ELF_FILE): LDFLAGS_BLT := $$(LDFLAGS_COMMON) $$(LDFLAGS_$(MCU)) -T$(xBLT_LDSCRIPT)
+$(BLT_ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BLU) $(H_FILE)
+	$$(QUIET)echo building transition bootloader updater for $(BUILD) with pin $(PIN)
+	$$(QUIET)$$(MKDIR) -p $(OBJ)
+	$$(QUIET)echo Compiling $(notdir $$@)
+	$$(QUIET)$(xCC) $$(CFLAGS_BLT) $$(LDFLAGS_BLT) -MMD -MP -MF $(BLT_DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BLU) -I. -DBL_HEADER_FILE=$(H_FILE) -Wl,-Map=$(BLT_MAP_FILE)
+
+# only a hex is generated: the image has a gap between the entry vector and
+# the code, which the flashing client fills in
+$(BLT_HEX_FILE): $$(BLT_ELF_FILE)
+	$$(QUIET)echo Generating $(notdir $$@)
+	$$(QUIET)$(xOBJCOPY) $$(<) -O ihex $$(@)
+	$$(QUIET)python3 bl_update/check_transition.py $$(@)
+
+$(BLT_AMJ_FILE): $$(BLT_HEX_FILE)
+	$$(QUIET)echo Generating $(notdir $$@)
+	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --githash $(shell git rev-parse HEAD) $(BLT_HEX_FILE) $(BLT_AMJ_FILE)
+
+$(BLT_TARGET): $$(BLT_AMJ_FILE)
+
+BLU_BUILDS := $(BLU_BUILDS) $(BLT_TARGET)
+endef
+
 # choose per-MCU pin override if set, otherwise the global BOOTLOADER_PINS
 pins_for_build = $(if $(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS))
 
-$(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(call pins_for_build,$(BUILD)),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))))
+$(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(call pins_for_build,$(BUILD)),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))$(if $(call has_transition,$(BUILD)),$(eval $(call CREATE_TRANSITION_TARGET,$(BUILD),$(PIN))))))
 
 # custom per-board targets from Inc/targets.h (BUILD|TAG|BOARDDEFINE)
-$(foreach B,$(BOARD_TARGETS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B))))))
+$(foreach B,$(BOARD_TARGETS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B)))))$(if $(call has_transition,$(word 1,$(subst |, ,$(B)))),$(eval $(call CREATE_TRANSITION_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B)))))))
 
 bootloaders: $(ALL_BUILDS)
 
