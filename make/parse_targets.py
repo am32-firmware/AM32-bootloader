@@ -6,13 +6,14 @@ Each board is a "#ifdef <BOARDNAME> ... #endif" block containing at least:
     #define FILE_NAME  "<name>"   the MCU is the name token matching a known MCU
                                   family, a trailing _CAN marks a CAN build
     #define TARGET_TAG <tag>      short tag used in the generated target name
+    #define USE_<pin>             the bootloader comms pin, eg USE_PA2
 
 For the ARK_G431_CAN block this produces the build target
 AM32_G431_BOOTLOADER_ARKG4_CAN.
 
 Usage:
-    parse_targets.py builds   -> one line per board: BUILD|TAG|BOARDDEFINE
-                                 e.g. G431_CAN|ARKG4|ARK_G431_CAN
+    parse_targets.py builds   -> one line per board: BUILD|TAG|BOARDDEFINE|PIN
+                                 e.g. G431_CAN|ARKG4|ARK_G431_CAN|PB4
     parse_targets.py mcus     -> unique MCU families used by custom boards
 '''
 
@@ -47,7 +48,8 @@ def parse_boards(path):
                 depth += 1
                 if depth == 1 and s.startswith('#ifdef'):
                     parts = s.split()
-                    cur = {'guard': parts[1], 'file_name': None, 'tag': None}
+                    cur = {'guard': parts[1], 'file_name': None, 'tag': None,
+                           'pin': None}
                 continue
             if s.startswith('#endif'):
                 if depth == 1 and cur is not None:
@@ -70,11 +72,17 @@ def parse_boards(path):
                 m = re.search(r'#define\s+TARGET_TAG\s+(\S+)', line)
                 if m:
                     cur['tag'] = m.group(1)
+            elif '#define' in line and 'USE_P' in line:
+                if is_commented(line, '#define'):
+                    continue
+                m = re.search(r'#define\s+USE_(P[A-Z][0-9]+)\b', line)
+                if m:
+                    cur['pin'] = m.group(1)
     return boards
 
 
 def board_build(board):
-    '''return (build, tag, boarddefine) or None if the MCU is unrecognised'''
+    '''return (build, tag, boarddefine, pin) or None if the MCU is unrecognised'''
     tokens = board['file_name'].split('_')
     mcu = next((t for t in tokens if t in KNOWN_MCUS), None)
     if mcu is None:
@@ -85,7 +93,7 @@ def board_build(board):
     is_can = 'CAN' in tokens
     build = mcu + ('_CAN' if is_can else '')
     tag = board['tag'] if board['tag'] else board['file_name']
-    return (build, tag, board['guard'])
+    return (build, tag, board['guard'], board['pin'] if board['pin'] else tag)
 
 
 def main():
@@ -95,14 +103,14 @@ def main():
     builds = [b for b in (board_build(x) for x in parse_boards(TARGETS_H)) if b]
     if mode == 'mcus':
         mcus = []
-        for build, _, _ in builds:
+        for build, _, _, _ in builds:
             mcu = build.split('_')[0]
             if mcu not in mcus:
                 mcus.append(mcu)
         print(' '.join(mcus))
     else:  # builds
-        for build, tag, define in builds:
-            print('%s|%s|%s' % (build, tag, define))
+        for build, tag, define, pin in builds:
+            print('%s|%s|%s|%s' % (build, tag, define, pin))
 
 
 if __name__ == '__main__':

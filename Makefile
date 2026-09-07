@@ -37,7 +37,9 @@ endef
 MCU_TYPES := $(sort $(foreach mcu,$(MCU_BUILDS),$(call base_mcu,$(mcu))))
 
 # custom per-board targets defined in Inc/targets.h, parsed by make/parse_targets.py.
-# BOARD_TARGETS entries are "BUILD|TAG|BOARDDEFINE", e.g. G431_CAN|ARKG4|ARK_G431_CAN
+# BOARD_TARGETS entries are "BUILD|TAG|BOARDDEFINE|PIN", e.g.
+# G431_CAN|ARKG4|ARK_G431_CAN|PB4. The tag names the build, the pin is the
+# board's real bootloader comms pin and is what goes in the amj file
 BOARD_TARGETS := $(shell python3 make/parse_targets.py builds)
 BOARD_MCUS := $(shell python3 make/parse_targets.py mcus)
 # make sure each custom board's per-MCU makefile gets included below
@@ -171,6 +173,9 @@ define CREATE_BOOTLOADER_TARGET
 $(eval BUILD := $(1))
 $(eval PIN := $(2))
 $(eval BOARD := $(3))
+# for a board target the build is named by its tag, but the amj file has to
+# name the pin the bootloader really listens on
+$(eval COMMS_PIN := $(if $(4),$(4),$(2)))
 $(eval MCU := $$(call base_mcu,$$(1)))
 $(eval EXTRA_CFLAGS := $(call get_cflags,$(1)))
 $(eval ELF_FILE := $(BIN_DIR)/$(call BOOTLOADER_BASENAME_VER,$(BUILD),$(PIN)).elf)
@@ -241,7 +246,7 @@ $(BLU_BIN_FILE): $$(BLU_ELF_FILE)
 
 $(BLU_AMJ_FILE): $$(BLU_BIN_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
-	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --githash $(shell git rev-parse HEAD) $(BLU_HEX_FILE) $(BLU_AMJ_FILE)
+	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --pin $(COMMS_PIN) --githash $(shell git rev-parse HEAD) $(BLU_HEX_FILE) $(BLU_AMJ_FILE)
 
 $(TARGET): $$(if $(NATIVE_$(MCU)),$$(ELF_FILE),$$(HEX_FILE))
 
@@ -260,6 +265,7 @@ define CREATE_TRANSITION_TARGET
 $(eval BUILD := $(1))
 $(eval PIN := $(2))
 $(eval BOARD := $(3))
+$(eval COMMS_PIN := $(if $(4),$(4),$(2)))
 $(eval MCU := $$(call base_mcu,$$(1)))
 $(eval EXTRA_CFLAGS := $(call get_cflags,$(1)))
 $(eval H_FILE := $(BIN_DIR)/$(call BOOTLOADER_BASENAME_VER,$(BUILD),$(PIN)).h)
@@ -293,7 +299,7 @@ $(BLT_HEX_FILE): $$(BLT_ELF_FILE)
 
 $(BLT_AMJ_FILE): $$(BLT_HEX_FILE)
 	$$(QUIET)echo Generating $(notdir $$@)
-	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --githash $(shell git rev-parse HEAD) $(BLT_HEX_FILE) $(BLT_AMJ_FILE)
+	$$(QUIET)python3 bl_update/make_amj.py --type bl_update --pin $(COMMS_PIN) --githash $(shell git rev-parse HEAD) $(BLT_HEX_FILE) $(BLT_AMJ_FILE)
 
 $(BLT_TARGET): $$(BLT_AMJ_FILE)
 
@@ -306,7 +312,7 @@ pins_for_build = $(if $(BOOTLOADER_PINS_$(call base_mcu,$1)),$(BOOTLOADER_PINS_$
 $(foreach BUILD,$(MCU_BUILDS),$(foreach PIN,$(call pins_for_build,$(BUILD)),$(eval $(call CREATE_BOOTLOADER_TARGET,$(BUILD),$(PIN)))$(if $(call has_transition,$(BUILD)),$(eval $(call CREATE_TRANSITION_TARGET,$(BUILD),$(PIN))))))
 
 # custom per-board targets from Inc/targets.h (BUILD|TAG|BOARDDEFINE)
-$(foreach B,$(BOARD_TARGETS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B)))))$(if $(call has_transition,$(word 1,$(subst |, ,$(B)))),$(eval $(call CREATE_TRANSITION_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B)))))))
+$(foreach B,$(BOARD_TARGETS),$(eval $(call CREATE_BOOTLOADER_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B))),$(word 4,$(subst |, ,$(B)))))$(if $(call has_transition,$(word 1,$(subst |, ,$(B)))),$(eval $(call CREATE_TRANSITION_TARGET,$(word 1,$(subst |, ,$(B))),$(word 2,$(subst |, ,$(B))),$(word 3,$(subst |, ,$(B))),$(word 4,$(subst |, ,$(B)))))))
 
 bootloaders: $(ALL_BUILDS)
 

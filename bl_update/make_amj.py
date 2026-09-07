@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser(description='make_amj')
 parser.add_argument('hex')
 parser.add_argument('amj')
 parser.add_argument("--type", default="bl_update")
+parser.add_argument("--pin", default=None)
 parser.add_argument("--githash", default="unknown")
 
 args = parser.parse_args()
@@ -39,7 +40,11 @@ if a[0] != 'AM32' or a[2] != 'BL' or a[3] != "UPDATER" or not a[-1].endswith(".h
     print("Bad hex file name")
     sys.exit(1)
 MCU = a[1]
-PIN = a[4]
+# a per-board build is named by its target tag, but the pin recorded here has
+# to be the pin the bootloader really listens on, so that a configurator can
+# check it against the pin the bootloader reports
+TARGET = a[4]
+PIN = args.pin if args.pin else TARGET
 VER = a[-1][:-4]
 
 # anything between the pin and the version is a build tag: a flash size, CAN
@@ -70,6 +75,7 @@ d = {
     "type": args.type,
     "mcuType": MCU,
     "pin": PIN,
+    "target": TARGET,
     "githash": args.githash,
     "version": VER,
     "flashSize": flash_size,
