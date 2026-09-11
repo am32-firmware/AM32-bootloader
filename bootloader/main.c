@@ -85,6 +85,11 @@
 #define input_port        GPIOB
 #define PIN_NUMBER        4
 #define PORT_LETTER       1
+#elif defined(USE_PB1)
+#define input_pin         GPIO_PIN(1)
+#define input_port        GPIOB
+#define PIN_NUMBER        1
+#define PORT_LETTER       1
 #elif defined(USE_PA15)
 #define input_pin         GPIO_PIN(15)
 #define input_port        GPIOA
