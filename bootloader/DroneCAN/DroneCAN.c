@@ -8,6 +8,7 @@
 
 #include <version.h>
 #include <eeprom.h>
+#include <flash_access.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -380,7 +381,7 @@ static bool set_eeprom_bytes(uint16_t offset, const uint8_t *data, uint16_t len)
   if ((uint32_t)offset + len > sizeof(buf)) {
     return false;
   }
-  memcpy(buf, (const void *)EEPROM_START_ADD, sizeof(buf));
+  memcpy(buf, FLASH_READ_PTR(EEPROM_START_ADD), sizeof(buf));
   if (memcmp(buf + offset, data, len) == 0) {
     // nothing to do; avoid an unnecessary erase cycle.
     return true;
@@ -403,7 +404,7 @@ static bool set_eeprom_byte(uint16_t offset, uint8_t value)
  */
 static bool bl_param_read_numeric(uint8_t p_idx, uint16_t *out_val)
 {
-  const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+  const uint8_t *eeprom = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
   const struct bl_param *p = &bl_parameters[p_idx];
   if (p->vtype == BL_T_STRING) {
     return false;
@@ -542,7 +543,7 @@ static void bl_param_fill_response(struct uavcan_protocol_param_GetSetResponse *
   }
   case BL_T_STRING: {
     pkt->value.union_tag = UAVCAN_PROTOCOL_PARAM_VALUE_STRING_VALUE;
-    const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+    const uint8_t *eeprom = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
     const uint16_t maxlen = sizeof(pkt->value.string_value.data);
     uint16_t slen = EEPROM_TUNE_LEN;
     if (slen > maxlen) slen = maxlen;
@@ -571,7 +572,7 @@ static void handle_param_GetSet(CanardInstance* ins, CanardRxTransfer* transfer)
     return;
   }
 
-  const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+  const uint8_t *eeprom = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
   int p_idx = -1;
 
   if (req.name.len != 0) {
@@ -1243,7 +1244,7 @@ static void DroneCAN_Startup(void)
 
   if (node_id == 0) {
     // check for valid node ID in settings
-    const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+    const uint8_t *eeprom = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
     if (eeprom[0] == 1 && eeprom[176] <= 127) {
       node_id = eeprom[176];
     }
@@ -1264,7 +1265,7 @@ static void DroneCAN_Startup(void)
     matching the main firmware's default.
    */
   {
-    const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+    const uint8_t *eeprom = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
     uint8_t term = eeprom[183];
     if (term > 1) {
       term = 0; // out of range -> default (disabled)
@@ -1309,7 +1310,7 @@ bool DroneCAN_update()
    */
   if (!have_raw_command && !noncan_fallback && !can_seen &&
       millis32() > NONCAN_FALLBACK_MS) {
-    const uint8_t *ee = (const uint8_t *)EEPROM_START_ADD;
+    const uint8_t *ee = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
     const bool wait_can = (ee[0] == 0x01 && ee[46] == DRONECAN_INPUT_TYPE);
     if (!wait_can) {
       noncan_fallback = true;
@@ -1321,7 +1322,7 @@ bool DroneCAN_update()
     // DroneCAN_boot_ok() seed defaults and boot it. If a CAN frame arrives
     // later, can_seen vetoes this and DNA/CAN handling resumes below.
     sys_can_enable_IRQ();
-    if (*(const uint8_t *)EEPROM_START_ADD != 0x01) {
+    if (*(const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD) != 0x01) {
       return false;
     }
     return DroneCAN_boot_ok();
@@ -1408,7 +1409,7 @@ bool DroneCAN_boot_ok(void)
    */
   uint32_t sig[2] = { APP_SIGNATURE_MAGIC1, APP_SIGNATURE_MAGIC2 };
   const uint32_t app_max_len = (128-18)*1024;
-  const uint8_t *fw_base = (const uint8_t *)MAIN_FW_START_ADDR;
+  const uint8_t *fw_base = (const uint8_t *)FLASH_READ_PTR(MAIN_FW_START_ADDR);
   struct app_signature *appsig = memmem(fw_base, app_max_len, sig, sizeof(sig));
   if (appsig == NULL || (((uintptr_t)appsig) & 3) != 0) {
     set_reason(FAIL_REASON_NO_APP_SIG, "no app signature");
@@ -1444,7 +1445,7 @@ bool DroneCAN_boot_ok(void)
 
   node_status.vendor_specific_status_code = CHECK_FW_OK;
 
-  const uint8_t eeprom_magic = *(uint8_t*)(EEPROM_START_ADD);
+  const uint8_t eeprom_magic = *(const uint8_t*)FLASH_READ_PTR(EEPROM_START_ADD);
   if (eeprom_magic == 0 || eeprom_magic == 0xff) {
       can_print("resetting to defaults");
       save_flash_nolib(default_settings, sizeof(default_settings), EEPROM_START_ADD);

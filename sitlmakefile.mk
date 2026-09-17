@@ -43,6 +43,11 @@ ifneq ($(filter CYGWIN%,$(UNAME_S)),)
 # PE defaults to an image base above 4 GB. Keep devinfo pointers within
 # the wire protocol's 32-bit address range and clear of mapped flash.
 LDFLAGS_COMMON_$(MCU) := -Wl,--image-base,0x400000,--disable-dynamicbase $(SITL_SAN_FLAGS)
+else ifeq ($(UNAME_S),Darwin)
+# macOS keeps PIE and maps flash at a host address; protocol reads are
+# translated by the SITL flash driver. Clang diagnoses unused LED stubs.
+CFLAGS_BASE_$(MCU) += -Wno-unused-function
+LDFLAGS_COMMON_$(MCU) := -Wl,-pie $(SITL_SAN_FLAGS)
 else
 LDFLAGS_COMMON_$(MCU) := -no-pie $(SITL_SAN_FLAGS)
 endif

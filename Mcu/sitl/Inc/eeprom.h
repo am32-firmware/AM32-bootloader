@@ -5,5 +5,5 @@
 
 #include <stdbool.h>
 
-void read_flash_bin(uint8_t* data, uint32_t add, int out_buff_len);
-bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add);
+void read_flash_bin(uint8_t* data, uintptr_t add, int out_buff_len);
+bool save_flash_nolib(const uint8_t* data, uint32_t length, uintptr_t add);

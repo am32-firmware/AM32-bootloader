@@ -2,6 +2,7 @@
 QUIET = @
 
 # tools
+comma := ,
 CC = $(ARM_SDK_PREFIX)gcc
 OBJCOPY = $(ARM_SDK_PREFIX)objcopy
 ECHO = echo
@@ -210,7 +211,7 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 	$$(QUIET)echo building bootloader for $(BUILD) with pin $(PIN)
 	$$(QUIET)$$(MKDIR) -p $(OBJ)
 	$$(QUIET)echo Compiling $(notdir $$@)
-	$$(QUIET)$(xCC) $$(CFLAGS_BL) $(CFLAGS_DRONECAN) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL) $(SRC_DRONECAN) -Wl,-Map=$(MAP_FILE)
+	$$(QUIET)$(xCC) $$(CFLAGS_BL) $(CFLAGS_DRONECAN) $$(LDFLAGS_BL) -MMD -MP -MF $(DEP_FILE) -o $$(@) $$(SRC_$(MCU)_BL) $$(SRC_BL) $(SRC_DRONECAN) $(if $(and $(NATIVE_$(MCU)),$(filter Darwin,$(UNAME_S))),-Wl$(comma)-map$(comma)$(MAP_FILE),-Wl$(comma)-Map=$(MAP_FILE))
 # debug.elf/svd/openocd.cfg are for on-chip debugging; skip them for the
 # native SITL target so obj/debug.elf never becomes a host binary that
 # arm-none-eabi-size (run over obj/*.elf in CI) cannot read

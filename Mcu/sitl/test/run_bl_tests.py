@@ -2,14 +2,14 @@
 '''
 test suite for the AM32 bootloader SITL.
 
-Needs the python protocol tools from the am32-firmware repo (Mcu/SITL:
+Needs the Python protocol tools from the ESCSim repo (SITL:
 sitl_dshot.py, sitl_fourway.py); point --fw-tools at that directory.
-With --app-elf (an AM32_SITL_CAN build from the same repo) the full
+With --app-elf (an AM32_SITL_CAN build from the firmware repo) the full
 boot chain via execve is tested too.
 
 usage:
   run_bl_tests.py --bootloader ../obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf \
-                  --fw-tools ../../am32-firmware/Mcu/SITL [--app-elf ...]
+                  --fw-tools ../../ESCSim/SITL [--app-elf ...]
 '''
 
 import argparse

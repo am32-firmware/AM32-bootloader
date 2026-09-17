@@ -44,9 +44,8 @@ MKDIR:=mkdir
 RM:=rm
 CUT:=cut
 FGREP:=fgrep
-# no toolchain for building V203 on MacOS; the SITL bootloader needs
-# the fixed low flash mapping which macOS does not allow by default
-MCU_NOBUILD:=V203 SITL_CAN
+# no toolchain for building V203 on MacOS
+MCU_NOBUILD:=V203
 else
 # assume Linux
 OSDIR:=linux

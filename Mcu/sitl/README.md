@@ -1,6 +1,6 @@
 # AM32 bootloader SITL
 
-Runs the unmodified bootloader as a native Linux or Cygwin process for testing
+Runs the unmodified bootloader as a native Linux, macOS or Cygwin process for testing
 the input-type detection, the 19200 baud 4-way configuration protocol
 and the DroneCAN bootloader flows without hardware.
 
@@ -10,6 +10,12 @@ Build and run:
 make AM32_SITL_BOOTLOADER_PB4_CAN
 ./obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf --eeprom test_ee.bin --can-uri none
 ```
+
+On macOS, the same target builds with the Xcode command-line tools on
+Apple Silicon or Intel. No low-address mapping or special privileges are
+needed. Allow Local Network access when macOS asks; local DroneCAN uses
+UDP multicast. If multicast is unavailable on the default interface, use
+`sudo route -n add -net 239.65.82.0/24 -interface lo0` for a local test bench.
 
 On Windows, install Cygwin's `gcc-core`, `make`, `python3` and `git`
 packages, then build from its Bash shell:
@@ -41,7 +47,9 @@ Run with `--help` for all options. Key points:
   and GPIO accesses, so the bit-banged serial timing is exact and test
   runs are repeatable; `--speedup` scales against the wall clock.
 - 128KB of flash is backed by `<eeprom>.blflash`, mapped at the real
-  `0x08000000` (the build is `-no-pie` for this). On first run it is
+  `0x08000000` on Linux/Cygwin. macOS uses a normal host mapping and
+  translates flash reads because Apple Silicon reserves the bottom 4 GB;
+  the protocol still uses the same MCU addresses. On first run it is
   seeded with a minimal valid application image so the boot checks
   behave like a programmed ESC. The eeprom page is kept coherent with
   the `--eeprom` file shared with the main firmware SITL.
@@ -54,12 +62,12 @@ Run with `--help` for all options. Key points:
   `--reset-cause software`. The main firmware SITL's `--bootloader`
   option chains the two, giving the full hardware-like boot loop.
 
-Tests (the python protocol tools live in the am32-firmware repo):
+Tests (the Python protocol tools live in the ESCSim repo):
 
 ```
 python3 Mcu/sitl/test/run_bl_tests.py \
     --bootloader obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf \
-    --fw-tools ../AM32/Mcu/SITL \
+    --fw-tools ../ESCSim/SITL \
     [--app-elf ../AM32/obj/AM32_AM32_SITL_CAN_*.elf]
 ```
 

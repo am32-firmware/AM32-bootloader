@@ -52,7 +52,14 @@ void Error_Handler(void)
 
 int sitl_bl_udp_socket(void)
 {
-    int fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd >= 0 && (fcntl(fd, F_SETFL, O_NONBLOCK) < 0 ||
+                   fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)) {
+        const int error = errno;
+        close(fd);
+        errno = error;
+        return -1;
+    }
     return fd;
 }
 

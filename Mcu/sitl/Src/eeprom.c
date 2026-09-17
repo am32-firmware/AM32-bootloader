@@ -1,8 +1,9 @@
 /*
   eeprom.c for the bootloader SITL: 128KB of flash backed by a file and
-  mapped at the real MCU flash address 0x08000000, so the unmodified
-  direct pointer reads in bootloader/main.c and DroneCAN.c (app vector
-  checks, signature scan, eeprom magic) work as on hardware.
+  mapped at the real MCU flash address 0x08000000 where the host permits
+  it. FLASH_READ_PTR translates MCU addresses on macOS, which reserves
+  the bottom 4 GB. App-vector checks, signature scans and EEPROM reads
+  still use the same simulated flash contents and protocol addresses.
 
   The eeprom page inside the flash image is kept coherent with the main
   firmware SITL's separate eeprom file: mirrored from the file at
@@ -134,6 +135,15 @@ void sitl_bl_flash_init(void)
             exit(1);
         }
     }
+#ifdef __APPLE__
+    // Apple Silicon reserves the bottom 4 GB. Translate MCU addresses
+    // through sitl_bl_flash_ptr() instead of forcing a low mapping.
+    flash = mmap(NULL, FLASH_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, flash_fd, 0);
+    if (flash == MAP_FAILED) {
+        perror("SITL: cannot map flash");
+        exit(1);
+    }
+#else
     // MAP_FIXED_NOREPLACE fails rather than clobbering an existing
     // mapping at 0x08000000. Where it is unavailable, fall back to a
     // plain hinted mmap (NOT MAP_FIXED, which would silently replace
@@ -150,6 +160,7 @@ void sitl_bl_flash_init(void)
         fprintf(stderr, "SITL: build must be -no-pie for the fixed flash mapping\n");
         exit(1);
     }
+#endif
     if (fresh) {
         fprintf(stderr, "SITL: seeding flash image %s\n", path);
         seed_flash();
@@ -197,9 +208,9 @@ static void eeprom_write_through(uint32_t offset, uint32_t length)
     fclose(f);
 }
 
-bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
+bool save_flash_nolib(const uint8_t* data, uint32_t length, uintptr_t add)
 {
-    if (add < FLASH_BASE_ADDR || add + length > FLASH_BASE_ADDR + FLASH_SIZE) {
+    if (add < FLASH_BASE_ADDR || add > FLASH_BASE_ADDR + FLASH_SIZE || length > FLASH_BASE_ADDR + FLASH_SIZE - add) {
         return false;
     }
     const uint32_t offset = add - FLASH_BASE_ADDR;
@@ -213,12 +224,23 @@ bool save_flash_nolib(const uint8_t* data, uint32_t length, uint32_t add)
         memset(flash + offset, 0xFF, erase);
     }
     memcpy(flash + offset, data, length);
-    msync(flash + (offset & ~4095UL), ((length + 4095) & ~4095UL) + 4096, MS_ASYNC);
+    // Sync the whole small mapping: macOS arm64 has 16 KB pages, and
+    // rounding a 2 KB EEPROM write to 4 KB is neither aligned nor bounded.
+    msync(flash, FLASH_SIZE, MS_ASYNC);
     eeprom_write_through(offset, length);
     return memcmp(flash + offset, data, length) == 0;
 }
 
-void read_flash_bin(uint8_t* data, uint32_t add, int out_buff_len)
+const void *sitl_bl_flash_ptr(uintptr_t address)
 {
-    memcpy(data, (const void*)(uintptr_t)add, out_buff_len);
+    if (address >= FLASH_BASE_ADDR && address < FLASH_BASE_ADDR + FLASH_SIZE) {
+        return flash + (address - FLASH_BASE_ADDR);
+    }
+    // The protocol's devinfo pseudo-address refers to host static data.
+    return (const void *)address;
+}
+
+void read_flash_bin(uint8_t* data, uintptr_t add, int out_buff_len)
+{
+    memcpy(data, sitl_bl_flash_ptr(add), out_buff_len);
 }

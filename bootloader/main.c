@@ -15,6 +15,7 @@
 //#pragma GCC optimize("O0")
 
 #include <eeprom.h>
+#include <flash_access.h>
 
 //#define USE_ADC_INPUT      // will go right to application and ignore eeprom
 //#define UPDATE_EEPROM_ENABLE
@@ -274,7 +275,11 @@ static const struct __attribute__((packed)) {
   uint16_t filename_start;
   uint16_t eeprom_start;
   uint16_t tune_start;
-} devinfo __attribute__((section(".devinfo"))) = {
+} devinfo
+#ifndef MCU_SITL
+__attribute__((section(".devinfo")))
+#endif
+= {
   .magic1 = DEVINFO_MAGIC1,
   .magic2 = DEVINFO_MAGIC2,
   .deviceInfo = {'4','7','1',PIN_CODE,FLASH_SIZE_CODE,0x06,0x06,BOOTLOADER_PROTOCOL_VERSION,0x30},
@@ -369,8 +374,8 @@ static void mark_serial_active(void)
 static uint8_t rxBuffer[258];
 static uint8_t payLoadBuffer[256];
 static uint8_t rxbyte;
-static uint32_t address;
-static uint32_t continue_address;
+static uintptr_t address;
+static uintptr_t continue_address;
 
 typedef union __attribute__ ((packed))
 {
@@ -424,7 +429,7 @@ static void jump()
   read_flash_bin(eeprom, EEPROM_START_ADD, EEPROM_MAX_SIZE);
   uint8_t value = eeprom[0];
 #else
-  uint8_t value = *(uint8_t*)(EEPROM_START_ADD);
+  uint8_t value = *(const uint8_t*)FLASH_READ_PTR(EEPROM_START_ADD);
 #endif
   if (value != 0x01) {      // check first byte of eeprom to see if its programmed, if not do not jump
     invalid_command = 0;
@@ -435,7 +440,7 @@ static void jump()
   /*
     first word of the app is the stack pointer - make sure that it is in range
    */
-  const uint32_t *app = (uint32_t*)(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
+  const uint32_t *app = (const uint32_t*)FLASH_READ_PTR(MCU_FLASH_START + FIRMWARE_RELATIVE_START);
   const uint32_t ram_start = 0x20000000;
 #ifndef RAM_LIMIT_KB
 #define RAM_LIMIT_KB 64
@@ -692,7 +697,7 @@ static void decodeInput()
       // config app has requested the devinfo structure (magic1, magic2,
       // deviceInfo). Lets the client read the protocol version and firmware
       // start over a 4-way link that doesn't forward the full deviceInfo.
-      address = (uint32_t)(uintptr_t)&devinfo;
+      address = (uintptr_t)&devinfo;
     } else if (address < 1024) {
       // other addresses below 1024 are reserved for future magic values
       send_BAD_ACK();
@@ -1053,7 +1058,7 @@ static void update_EEPROM()
   uint8_t eeprom[EEPROM_MAX_SIZE];
   read_flash_bin(eeprom, EEPROM_START_ADD, EEPROM_MAX_SIZE);
 #else
-  const uint8_t *eeprom = (const uint8_t *)EEPROM_START_ADD;
+  const uint8_t *eeprom = (const uint8_t *)FLASH_READ_PTR(EEPROM_START_ADD);
 #endif
   if (BOOTLOADER_VERSION != eeprom[2]) {
     if (eeprom[2] == 0xFF || eeprom[2] == 0x00) {

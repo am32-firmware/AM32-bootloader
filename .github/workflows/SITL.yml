@@ -9,9 +9,21 @@ on:
 
 jobs:
   sitl-bootloader-tests:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Route local DroneCAN multicast (macOS)
+        if: runner.os == 'macOS'
+        run: sudo route -n add -net 239.65.82.0/24 -interface lo0
 
       - name: Build SITL bootloader
         run: make AM32_SITL_BOOTLOADER_PB4_CAN
@@ -19,14 +31,17 @@ jobs:
       - name: Check seeded application and legacy flash recovery
         run: python3 Mcu/sitl/test/seed_test.py --bootloader obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf --can-uri mcast:8
 
-      - name: Get protocol tools from the firmware repo
+      - name: Get protocol tools from ESCSim
         uses: actions/checkout@v4
         with:
-          repository: am32-firmware/AM32
-          path: am32-firmware
-          # only the python protocol tools in Mcu/SITL are used, the
-          # firmware itself is not built here
-          sparse-checkout: Mcu/SITL
+          repository: am32-firmware/ESCSim
+          path: escsim
+          # The protocol tools now live in ESCSim. Its parameter parser
+          # also needs the pinned firmware headers.
+          submodules: false
+
+      - name: Get firmware parameter definitions
+        run: git -C escsim submodule update --init --depth 1 modules/am32-firmware
 
       - name: Install pydronecan
         run: python3 -m pip install dronecan
@@ -36,13 +51,13 @@ jobs:
           mkdir sitl_test_run && cd sitl_test_run
           python3 ../Mcu/sitl/test/run_bl_tests.py \
             --bootloader ../obj/AM32_SITL_BOOTLOADER_PB4_CAN_*.elf \
-            --fw-tools ../am32-firmware/Mcu/SITL
+            --fw-tools ../escsim/SITL
 
       - name: Upload test log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: sitl-bootloader-test-log
+          name: sitl-bootloader-test-log-${{ matrix.os }}
           path: sitl_test_run/bl_test.log
 
   cygwin-bootloader-tests:

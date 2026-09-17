@@ -49,7 +49,7 @@ void sitl_bl_pin_write(uint8_t level);
 void sitl_bl_pin_mode_input(uint32_t pull); // flushes pending tx as a reply
 void sitl_bl_pin_mode_output(void);
 
-// flash/eeprom backing store mapped at 0x08000000
+// flash/eeprom backing store, translated from MCU addresses on macOS
 void sitl_bl_flash_init(void);
 
 // process control
