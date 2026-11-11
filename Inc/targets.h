@@ -142,6 +142,20 @@
 #define USE_LSE_BYPASS 1
 #endif
 
+#ifdef NES_80A_L431_CAN
+#define FILE_NAME "NES_80A_L431_CAN" // parser: MCU=L431, CAN build
+#define TARGET_TAG NES80A            // -> AM32_L431_BOOTLOADER_NES80A_CAN
+#define USE_PA2                      // from HARDWARE_GROUP_L4_A (INPUT_PIN PA2)
+
+// bxCAN pins are fixed at PA11/PA12 in the L431 bootloader CAN driver.
+
+// No CAN termination control on this board (PB3 is not wired), so CAN_TERM_PIN
+// is deliberately left undefined: external 120R must be supplied on the bus.
+
+// No external oscillator on this board (PC14/PC15 unconnected): use the
+// HSI16 default path, which lands on the same 80 MHz PLL as the application.
+#endif
+
 #ifdef TBS_12S_F415_CAN
 #define FILE_NAME "TBS_12S_F415_CAN" // parser: MCU=F415, CAN build
 #define TARGET_TAG TBS12SF4          // -> AM32_F415_BOOTLOADER_TBS12SF4_CAN
