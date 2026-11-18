@@ -21,7 +21,7 @@ ROOT := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 include $(ROOT)/make/tools.mk
 
 # MCU builds, if with _xxK then adds build with given flash size
-MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A153 SITL_CAN
+MCU_BUILDS := E230 F031 F051 F415 F415_128K F421 G071 G071_64K L431 L431_128K G431 V203 L431_CAN F415_CAN G431_CAN A13X SITL_CAN
 
 # we support bootloader comms on a list of possible pins
 BOOTLOADER_PINS = PB4 PA2 PA6 PA15 PA0 PB2
@@ -217,7 +217,7 @@ $(ELF_FILE): $$(SRC_$(MCU)_BL) $$(SRC_BL) $$(SRC_DRONECAN)
 # arm-none-eabi-size (run over obj/*.elf in CI) cannot read
 $(if $(NATIVE_$(MCU)),,	$$(QUIET)$$(CP) -f $$@ $$(OBJ)$$(DSEP)debug.elf
 	$$(QUIET)$$(CP) -f $$(SVD_$(MCU)) $$(OBJ)/debug.svd
-	$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL))
+	$(if $(NO_OPENOCD_$(MCU)),,$$(QUIET)$$(CP) -f Mcu$(DSEP)$(call lc,$(MCU))$(DSEP)openocd.cfg $$(OBJ)$$(DSEP)openocd.cfg > $$(NUL)))
 
 $(H_FILE): $(BIN_FILE)
 	$$(QUIET)python3 bl_update/make_binheader.py $(BIN_FILE) $(H_FILE)

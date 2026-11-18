@@ -65,7 +65,7 @@
 #ifndef FIRMWARE_RELATIVE_START
 // note: DRONECAN_SUPPORT is always defined (0 or 1) by the build, so test its
 // value rather than defined(), to match the convention used elsewhere
-#if defined(MCXA153) || DRONECAN_SUPPORT
+#if defined(MCXA13X) || DRONECAN_SUPPORT
 #define FIRMWARE_RELATIVE_START 0x4000
 #else
 #define FIRMWARE_RELATIVE_START 0x1000
