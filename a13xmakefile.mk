@@ -3,6 +3,10 @@ PART := MCXA13X
 
 MCU_LC := $(call lc,$(MCU))
 
+# OpenOCD has no MCXA13X support, so there is no openocd.cfg to copy.
+# Debug with pyOCD, J-Link or NXP LinkServer instead.
+NO_OPENOCD_$(MCU) := 1
+
 HAL_FOLDER_$(MCU) := $(HAL_FOLDER)/$(MCU_LC)
 
 MCU_$(MCU) := -mcpu=cortex-m33+nodsp -mthumb
